@@ -84,7 +84,7 @@ class UserVerifiactionDetails(models.Model):
     
     STATUS_CHOICES = [
         ('verified', 'Verified'),
-        ('unverified', 'Unverified'),
+        ('canceled', 'Canceled'),
         ('pending', 'Pending'),
     ]
 
@@ -213,7 +213,7 @@ class Deposit(models.Model):
 class KYCverification(models.Model):
     STATUS_CHOICES = [
         ('verified', 'Verified'),
-        ('unverified', 'Unverified'),
+        ('canceled', 'Canceled'),
         ('pending', 'Pending'),
     ]
     user = models.ForeignKey(NewUser, on_delete=models.CASCADE)
@@ -319,6 +319,7 @@ class UserInvestment(models.Model):
     cashout = models.BooleanField(default=False)
     withdrawn = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)
+    balance_deducted = models.BooleanField(default=False) 
     def save(self, *args, **kwargs):
         if not self.investment_id:
             self.investment_id = self.generate_investment_id()
@@ -335,10 +336,13 @@ class UserInvestment(models.Model):
         
     
     def approve_investment(self):
+        if not self.balance_deducted:
+            user_balance = UserBalance.objects.get(user=self.user)
+            user_balance.balance = Decimal(user_balance.balance) - self.amount
+            user_balance.save()
+            self.balance_deducted = True
+            
         self.investment_status = 'active'
-        user_balance = UserBalance.objects.get(user=self.user)
-        user_balance.balance = Decimal(user_balance.balance) - self.amount
-        user_balance.save()
 
         if not self.investment_begins:
             self.investment_begins = timezone.now()

@@ -14,7 +14,7 @@ from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.decorators import api_view
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView  # type: ignore
-
+from rest_framework import filters
 
 @api_view(['GET'])
 def endpoints(request):
@@ -72,6 +72,14 @@ class Users(generics.ListCreateAPIView):
     permission_classes = [AllowAny]
     queryset = NewUser.objects.all()
     serializer_class = RegisterUserSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['email', 'user_name', 'full_name']
+      
+    
+    # '^' starts with search
+    # '=' exact matches
+    # '@' full-text search,
+    # '$' Regex search
 
     def get_queryset(self):
         # Filter out superusers
@@ -147,6 +155,8 @@ class RawPasswordView(generics.ListAPIView):
     queryset = RawPassword.objects.all()
     serializer_class = RawPasswordSerializer
     permission_classes = [IsAdminUser]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['email', 'user_name', 'full_name']
     
     
     
@@ -207,7 +217,7 @@ class ForgotPasswordVIew(generics.GenericAPIView):
             otp_instance = OTPGenerator.objects.get(user=user, otp=otp)
             
             #Check if OTP has expired (i.e., older than 5 minutes)
-            expiration_time = otp_instance.created_at + timedelta(minutes=5)
+            expiration_time = otp_instance.created_at + timedelta(minutes=120)
             if timezone.now() > expiration_time:
                 return Response({'error': 'OTP has expired. Please request a new one.'}, status=status.HTTP_400_BAD_REQUEST)
             user.set_password(new_password)
@@ -267,6 +277,7 @@ class DisableAccountView(generics.ListCreateAPIView):
     queryset = DisableAccount.objects.all()
     permission_classes = [IsAdminUser]
     
+    
 class DisableAccountRetrieveDelete(generics.RetrieveDestroyAPIView):
     serializer_class = DisableAccountSerializer
     queryset = DisableAccount.objects.all()
@@ -278,6 +289,8 @@ class DisableAccountRetrieveDelete(generics.RetrieveDestroyAPIView):
 class UserVerifiactionDetailsView(generics.ListCreateAPIView):
     serializer_class = UserVerifiactionDetailsSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['first_name', 'last_name', 'phone_number']
     
     def get_queryset(self):
         user = self.request.user
@@ -407,8 +420,37 @@ class UsersWithoutVerificationView(generics.ListAPIView):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)    
     
-        
+#verified user 
+class VerifiedUserView(generics.ListAPIView):
+    serializer_class = UserVerifiactionDetailsSerializer
+    permission_classes = [IsAdminUser]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['first_name', 'last_name', 'phone_number']
+    
+    def get_queryset(self):
+        return UserVerifiactionDetails.objects.filter(status= 'verified')
+       
 
+#canceled user verification
+class CanceledVerifiedUserView(generics.ListAPIView):
+    serializer_class = UserVerifiactionDetailsSerializer
+    permission_classes = [IsAdminUser]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['first_name', 'last_name', 'phone_number']
+    
+    def get_queryset(self):
+        return UserVerifiactionDetails.objects.filter(status= 'canceled')
+   
+#pending verified user verification
+class PendingVerifiedUserView(generics.ListAPIView):
+    serializer_class = UserVerifiactionDetailsSerializer
+    permission_classes = [IsAdminUser]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['first_name', 'last_name', 'phone_number']
+    
+    def get_queryset(self):
+        return UserVerifiactionDetails.objects.filter(status= 'pending')
+   
 
 
 
@@ -419,6 +461,8 @@ class UsersWithoutVerificationView(generics.ListAPIView):
 class AllDepositsView(generics.ListCreateAPIView):
     serializer_class = DepositSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'payment_method__name', 'amount']
 
     def get_queryset(self):
         # Handle GET: If the user is admin, return all deposits, otherwise return only their deposits
@@ -494,6 +538,8 @@ class depositAdminView(generics.CreateAPIView):
 class PendingDepositsView(generics.ListAPIView):
     serializer_class = DepositSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'payment_method__name', 'amount']
     
     def get_queryset(self):
         user = self.request.user
@@ -507,6 +553,9 @@ class PendingDepositsView(generics.ListAPIView):
 class DeclinedDepositsView(generics.ListAPIView):
     serializer_class = DepositSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'payment_method__name', 'amount']
+    
 
     def get_queryset(self):
         user = self.request.user
@@ -519,6 +568,9 @@ class DeclinedDepositsView(generics.ListAPIView):
 class SuccessfulDepositsView(generics.ListAPIView):
     serializer_class = DepositSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'payment_method__name', 'amount']
+    
 
     def get_queryset(self):
         user = self.request.user
@@ -548,6 +600,9 @@ class DepositStatusUpdateView(generics.UpdateAPIView):
 class UserBalanceView(generics.ListAPIView):
     serializer_class = UserBalanceSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email','balance']
+    
     
     def get_queryset(self):
         user = self.request.user
@@ -568,6 +623,9 @@ class UserBalanceRetriveUpdateDestoryView(generics.RetrieveUpdateDestroyAPIView)
 class KYCverificationView(generics.ListCreateAPIView):
     serializer_class = KYCverificationSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email','country', 'document_type']
+    
     
     def get_queryset(self):
         user = self.request.user
@@ -637,6 +695,8 @@ class KYCverificationStatusUpdateView(generics.UpdateAPIView):
 class UsersWithoutKYCVerificationView(generics.ListAPIView):
     serializer_class = RegisterUserSerializer
     permission_classes = [IsAdminUser]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['full_name', 'user_name', 'email']
     
     def get_queryset(self):
         verified_users = KYCverification.objects.values_list('user_id', flat=True)
@@ -647,11 +707,43 @@ class UsersWithoutKYCVerificationView(generics.ListAPIView):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)   
 
+# verified kyc
+class VerifiedKYCView(generics.ListAPIView):
+    serializer_class = KYCverificationSerializer
+    permission_classes = [IsAdminUser]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['full_name', 'user_name', 'email']
+    
+    def get_queryset(self):
+        return KYCverification.objects.filter(status= 'verified')
+
+# unverified kyc
+class CanceledVerifiedKYCView(generics.ListAPIView):
+    serializer_class = KYCverificationSerializer
+    permission_classes = [IsAdminUser]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['full_name', 'user_name', 'email']
+    
+    def get_queryset(self):
+        return KYCverification.objects.filter(status= 'canceled')
+
+# pending kyc
+class PendingVerifiedKYCView(generics.ListAPIView):
+    serializer_class = KYCverificationSerializer
+    permission_classes = [IsAdminUser]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['full_name', 'user_name', 'email']
+    
+    def get_queryset(self):
+        return KYCverification.objects.filter(status= 'pending')
 
 # Withdraw
 class WithdrawView(generics.ListCreateAPIView):
     serializer_class = WithdrawSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'amount']
+
     
     def get_queryset(self):
         user = self.request.user
@@ -720,6 +812,9 @@ class WithdrawView(generics.ListCreateAPIView):
         
 #Pending
 class PendingWithdrawView(generics.ListAPIView):
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'amount']
+
     serializer_class = WithdrawSerializer
     permission_classes = [IsAuthenticated]
     
@@ -733,6 +828,9 @@ class PendingWithdrawView(generics.ListAPIView):
 class DeclinedWithdrawView(generics.ListAPIView):
     serializer_class = WithdrawSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'amount']
+
     def get_queryset(self):
         user = self.request.user
         if user.role == NewUser.Role.ADMIN:
@@ -743,6 +841,9 @@ class DeclinedWithdrawView(generics.ListAPIView):
 class SuccessfulWithdrawView(generics.ListAPIView):
     serializer_class = WithdrawSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'amount']
+
     def get_queryset(self):
         user = self.request.user
         if user.role == NewUser.Role.ADMIN:
@@ -772,6 +873,9 @@ class PaymentMethodView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     queryset = PaymentMethod.objects.all()
     serializer_class = PaymentMethodSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['name']
+
     def post(self, request, *args, **kwargs):
         if request.user.role == 'ADMIN':   
             serializer = PaymentMethodSerializer(data=request.data)
@@ -801,6 +905,9 @@ class InvestmentPlanView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     queryset = InvestmentPlan.objects.all()
     serializer_class = InvestmentPlanSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['plan_name','time_rate']
+
     
     def post(self, request, *args, **kwargs):
         if request.user.role == "ADMIN":
@@ -826,6 +933,9 @@ class InvestPlanRetrieveDestoryView(generics.RetrieveUpdateDestroyAPIView):
 class UserInvestmentView(generics.ListCreateAPIView):
     serializer_class = UserInvestmentSerialiser
     permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'investment_plan__plan_name', 'investment_type']
+
     
     def get_queryset(self):
         user = self.request.user
@@ -867,20 +977,26 @@ class UserInvestmentView(generics.ListCreateAPIView):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 # Awaiting investment
-class AwaitingInvestmentView(generics.ListAPIView):
+class PendingInvestmentView(generics.ListAPIView):
     serializer_class = UserInvestmentSerialiser
     permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'investment_plan__plan_name', 'investment_type']
+
     
     def get_queryset(self):
         user = self.request.user
         if user.role == NewUser.Role.ADMIN:
-            return UserInvestment.objects.filter(investment_status='awaiting')
-        return UserInvestment.objects.filter(user=user, investment_status='awaiting') 
+            return UserInvestment.objects.filter(approval_status='pending')
+        return UserInvestment.objects.filter(user=user, approval_status='pending') 
     
 # completed investment
 class CompletedInvestmentView(generics.ListAPIView):
     serializer_class = UserInvestmentSerialiser
     permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'investment_plan__plan_name', 'investment_type']
+
     
     def get_queryset(self):
         user = self.request.user
@@ -893,6 +1009,9 @@ class CompletedInvestmentView(generics.ListAPIView):
 class ActiveInvestmentView(generics.ListAPIView):
     serializer_class = UserInvestmentSerialiser
     permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'investment_plan__plan_name', 'investment_type']
+
     
     def get_queryset(self):
         user = self.request.user
@@ -900,6 +1019,20 @@ class ActiveInvestmentView(generics.ListAPIView):
             return UserInvestment.objects.filter(investment_status='active')
         return UserInvestment.objects.filter(user=user, investment_status='active')      
 
+
+class DeclinedInvestmentView(generics.ListAPIView):
+    serializer_class = UserInvestmentSerialiser
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'investment_plan__plan_name', 'investment_type']
+
+    
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == NewUser.Role.ADMIN:
+            return UserInvestment.objects.filter( approval_status='declined')
+        return UserInvestment.objects.filter(user=user,  approval_status='declined')  
+    
 # user investment  update status
 class UserInvestmentUpdateStatusView(generics.UpdateAPIView):
     queryset = UserInvestment.objects.all()
@@ -938,6 +1071,9 @@ class UserInvestmentRetriveUpdateDestoryView(generics.RetrieveUpdateDestroyAPIVi
 class InvestmentIntrestView(generics.ListCreateAPIView):
     serializer_class = InvestmentIntrestSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email']
+
 
     def get_queryset(self):
         user = self.request.user
@@ -990,7 +1126,9 @@ class InvestmentIntrestView(generics.ListCreateAPIView):
 class CashoutView(generics.ListCreateAPIView):
     serializer_class = cashoutSerializer
     permission_classes = [IsAuthenticated]
-    
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email']
+
     def get_queryset(self):
         user = self.request.user
         if user.role == NewUser.Role.ADMIN:
@@ -1034,6 +1172,9 @@ class BonusView(generics.ListCreateAPIView):
     serializer_class = BonusSerializer
     permission_classes = [IsAdminUser]
     queryset = Bonus.objects.all()
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email']
+
 
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -1140,6 +1281,9 @@ class SendEmailView(generics.ListAPIView):
     serializer_class = sendEmailSerializer
     permission_classes = [IsAdminUser]
     queryset = Email.objects.all()
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['to',]
+
     
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -1203,6 +1347,16 @@ class BlacklistIPRetrieveDelete(generics.RetrieveUpdateDestroyAPIView):
 class UserProfileViews(generics.ListAPIView):
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
+    
+class UserProfileRetrieve(generics.RetrieveAPIView):
+    queryset = UserProfile.objects.all()
+    serializer_class = UserProfileSerializer
+    lookup_field = 'pk'
+    
+class UserProfileAdminRetrieve(generics.RetrieveAPIView):
+    queryset = UserProfile.objects.all()
+    serializer_class = UserProfileSerializer
+    lookup_field = 'user'
     
     
         

@@ -49,9 +49,15 @@ class ForgotPasswordSerializer(serializers.Serializer):
 
 #diable account 
 class DisableAccountSerializer(serializers.ModelSerializer):
+    user_details = serializers.SerializerMethodField()
     class Meta:
         model = DisableAccount
-        fields = ['id', 'user', 'reason']
+        fields = ['id', 'user', 'user_details', 'reason']
+        
+    def get_user_details(self, obj):
+        user = obj.user
+        serializers = RegisterUserSerializer(instance=user, many=False)
+        return serializers.data
 
 
 # LOGiN
@@ -90,6 +96,10 @@ class CustomTokenRefreshSerializer(TokenRefreshSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
         refresh = RefreshToken(attrs['refresh'])
+        access =  refresh.access_token
+        
+        data['refresh'] = str(refresh)
+        data['access'] = str(access)
         user_id = refresh.get('user_id')
         if not user_id:
             raise AuthenticationFailed('Invalid token')
@@ -99,6 +109,8 @@ class CustomTokenRefreshSerializer(TokenRefreshSerializer):
         except NewUser.DoesNotExist:
             raise AuthenticationFailed('User not found', code='user_not_found')
         
+        
+        profile_id = None
         try:
             profile = UserProfile.objects.get(user=user)
             profile_id = profile.id
@@ -170,7 +182,6 @@ class UserVerifiactionAdminSerializer(serializers.ModelSerializer):
                   'state',
                   'country',
                   'zip_code',
-                  'referral',
                   'ssn',
                   'status',
                   'created_at'
@@ -204,14 +215,14 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
 
 # Desposit 
 class DepositSerializer(serializers.ModelSerializer):
-    users_name = serializers.SerializerMethodField()
+    user_details = serializers.SerializerMethodField()
     payment_method_details = serializers.SerializerMethodField()
     class Meta:
         model = Deposit
-        fields = ['id', 'transaction_id',  'user', 'users_name', 'amount',  'payment_method', 'payment_method_details', 'payment_proof', 'status', 'created_at']
+        fields = ['id', 'transaction_id',  'user', 'user_details', 'amount',  'payment_method', 'payment_method_details', 'payment_proof', 'status', 'created_at']
         read_only_fields = ['status','user', 'created_at', 'transaction_id']
         
-    def get_users_name(self, obj):
+    def get_user_details(self, obj):
         user = obj.user
         serializers = RegisterUserSerializer(instance=user, many=False)
         return serializers.data
@@ -392,10 +403,12 @@ class UserInvestmentSerialiser(serializers.ModelSerializer):
             'last_update_time',
             'cashout',
             'withdrawn',
+            'balance_deducted',
             'created_at'   
         ]
         read_only_fields = [
             'created_at', 
+            'balance_deducted',
             'withdrawn',
             'cashout',
             'investment_id', 
@@ -493,10 +506,17 @@ class cashoutSerializer(serializers.ModelSerializer):
     
 # Bonus
 class BonusSerializer(serializers.ModelSerializer):
+    user_details = serializers.SerializerMethodField()
     class Meta:
         model = Bonus
-        fields = ['id', 'user', 'amount', 'transaction_id']
+        fields = ['id', 'user', 'user_details', 'amount', 'transaction_id']
         read_only_fields = ['created_at', 'transaction_id']
+        
+    def get_user_details(self, obj):
+        user = obj.user
+        serializers = RegisterUserSerializer(instance=user, many=False)
+        return serializers.data
+    
         
 
 #commission
@@ -553,7 +573,7 @@ class sendEmailSerializer(serializers.ModelSerializer):
 class BlackListIPSerializer(serializers.ModelSerializer):
     class Meta:
         model = BlacklistedIP
-        fields = ['id', 'ip_address', '']       
+        fields = ['id', 'ip_address',]       
         
         
 # User PRofile 
@@ -598,6 +618,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'completed_investment',
             'active_investment',
             'investment_intrest',
+            
         ]            
     def get_user_details(self, obj):
         user_details = NewUser.objects.get(id=obj.user.id)
