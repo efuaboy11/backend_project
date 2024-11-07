@@ -10,7 +10,7 @@ from rest_framework.exceptions import AuthenticationFailed
 class RegisterUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = NewUser
-        fields = ('id','email', 'user_name', 'full_name',  'password')
+        fields = ('id','email', 'user_name', 'full_name',  'password', 'date_joined')
         
         extra_kwargs = {
             'password': {'write_only': True},  # Hide password in response
@@ -28,6 +28,11 @@ class RegisterUserSerializer(serializers.ModelSerializer):
             instance.set_password(password)
         instance.save()
         return instance
+    
+class UpdateUserSearlizer(serializers.ModelSerializer):
+    class Meta:
+        model = NewUser
+        fields = ['email', 'user_name', 'full_name']
     
 
 # Raw password
@@ -574,7 +579,12 @@ class BlackListIPSerializer(serializers.ModelSerializer):
     class Meta:
         model = BlacklistedIP
         fields = ['id', 'ip_address',]       
-        
+    
+class NewsLetterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NewsLetters
+        fields = ['id', 'name', 'email', 'created_at']
+        read_only_fields = ['created_at']
         
 # User PRofile 
 class UserProfileSerializer(serializers.ModelSerializer):

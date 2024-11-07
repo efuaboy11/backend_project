@@ -465,14 +465,22 @@ class BlacklistedIP(models.Model):
     
     def __str__(self):
         return f"{self.ip_address} - {self.reason}"
-        
-
     
+    
+# NewsLetter
+class NewsLetters(models.Model):
+    name = models.CharField(max_length=500, null=True, blank=True)
+    email = models.EmailField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)
+    
+
+
 # user profile 
 class UserProfile(models.Model):
     user = models.ForeignKey(NewUser, on_delete=models.CASCADE)
     
     def __str__(self):
         return f"{self.user.full_name} Profile"
+    
     
         

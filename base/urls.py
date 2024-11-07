@@ -36,9 +36,9 @@ urlpatterns = [
     path('user/kyc-verification/<str:pk>/', KYCverificationDeleteView.as_view(), name='kyc-verification'),
     path('user/kyc-verification/<str:pk>/update-status/', KYCverificationStatusUpdateView.as_view(), name='kyc-verification-status'),   
     path('users/without-KYC-verification/', UsersWithoutKYCVerificationView.as_view(), name='users-without-KYCverification'),
-    path('user/kyc-verification/verified', VerifiedKYCView.as_view(), name='user-verification-verified'),
-    path('user/kyc-verification/canceled', CanceledVerifiedKYCView.as_view(), name='user-verification-verified'),
-    path('user/kyc-verification/pending', PendingVerifiedKYCView.as_view(), name='user-verification-pending'),
+    path('users/kyc-verification/verified/', VerifiedKYCView.as_view(), name='user-verification-verified'),
+    path('users/kyc-verification/canceled/', CanceledVerifiedKYCView.as_view(), name='user-verification-verified'),
+    path('users/kyc-verification/pending/', PendingVerifiedKYCView.as_view(), name='user-verification-pending'),
     
     #User Balance
     path('user/balance/', UserBalanceView.as_view(), name='Balance'),
@@ -93,6 +93,10 @@ urlpatterns = [
     
     path('Blacklist-ip/', BlacklistIPView.as_view(), name='blacklist-ip'),
     path('blacklist-ip/<int:pk>/', BlacklistIPRetrieveDelete.as_view(), name='Blacklist-ip-delete'),
+    
+    
+    path('news-letter/', NewsLetterViews.as_view(), name='v'),
+    
     
     path('user-profile/', UserProfileViews.as_view(), name='user-profile'),
     path('user-profile/<int:pk>/', UserProfileRetrieve.as_view(), name='user-profile'),

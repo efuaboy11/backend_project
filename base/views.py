@@ -148,7 +148,7 @@ class Users(generics.ListCreateAPIView):
 #user details
 class UserDetails(generics.RetrieveUpdateDestroyAPIView):
     queryset = NewUser.objects.all()
-    serializer_class = RegisterUserSerializer 
+    serializer_class = UpdateUserSearlizer 
     lookup_field = 'id'
     
 class RawPasswordView(generics.ListAPIView):
@@ -412,7 +412,7 @@ class UsersWithoutVerificationView(generics.ListAPIView):
     permission_classes = [IsAdminUser]
 
     def get_queryset(self):
-        verified_users = UserVerifiactionDetails.objects.values_list('user_id', flat=True)
+        verified_users = UserVerifiactionDetails.objects.filter(status='verified').values_list('user_id', flat=True)
         return NewUser.objects.exclude(id__in=verified_users)
     
     def get(self, request, *args, **kwargs):
@@ -581,7 +581,7 @@ class SuccessfulDepositsView(generics.ListAPIView):
 
 # Delete deposit details
 class DepositRetriveDestoryView(generics.RetrieveDestroyAPIView):
-    serializer_class = DepositAdminSerializer
+    serializer_class = DepositSerializer
     permission_classes = [IsAdminUser]
     queryset = Deposit.objects.all()
     lookup_field = 'pk'
@@ -1343,6 +1343,32 @@ class BlacklistIPRetrieveDelete(generics.RetrieveUpdateDestroyAPIView):
     queryset = BlacklistedIP.objects.all()
     permission_classes = [IsAdminUser]
     lookup_field = 'pk'
+  
+  
+#News letter
+class NewsLetterViews(generics.ListCreateAPIView):
+    serializer_class = NewsLetterSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        # Only admins should see all newsletters
+        if user.role == NewUser.Role.ADMIN:
+            return NewsLetters.objects.all()
+        else:
+            return NewsLetters.objects.none()  # Return an empty queryset if not admin
+
+    def get(self, request, *args, **kwargs):
+        user = self.request.user
+        if user.role != NewUser.Role.ADMIN:
+            return Response('Bad Request: You cannot perform this action', status=status.HTTP_400_BAD_REQUEST)
+
+        # If the user is an admin, proceed with the usual flow
+        return super().get(request, *args, **kwargs)
+
+            
+        
+    
     
 class UserProfileViews(generics.ListAPIView):
     queryset = UserProfile.objects.all()
