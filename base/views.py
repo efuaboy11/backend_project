@@ -1123,6 +1123,38 @@ class InvestmentIntrestView(generics.ListCreateAPIView):
             return Response({"error": "You are not authorized to perform this action"}, status=status.HTTP_403_FORBIDDEN)
 
 
+class FilteredInvestmentIntrestView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = InvestmentIntrestSerializer
+    
+    def get_queryset(self):
+        user = self.request.query_params.get('user')
+        investment_id= self.request.query_params.get('investment_id')
+        
+        if user and investment_id:
+            return InvestmentIntrest.objects.filter(user=user, investment_id=investment_id)
+        return InvestmentIntrest.objects.none()
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        if not queryset.exists():
+            return Response({"detail": "No records found for the given user and transaction_id."},
+                            status=status.HTTP_404_NOT_FOUND)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+        
+            
+
+class AddMoneyToInvestmentView(APIView):
+    def post(self, request):
+        serializer = AddMoneyToInvestmentSerializer(data=request.data)   
+        
+        if serializer.is_valid():
+            result = serializer.save()
+            return Response(result, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)    
+    
+
 class CashoutView(generics.ListCreateAPIView):
     serializer_class = cashoutSerializer
     permission_classes = [IsAuthenticated]

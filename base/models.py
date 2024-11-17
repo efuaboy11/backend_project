@@ -188,7 +188,7 @@ class Deposit(models.Model):
     payment_proof = models.ImageField(upload_to='deposit_proofs/')
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
     transaction_id = models.CharField(max_length=16, unique=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now) 
     
     def __str__(self):
         return f'{self.user.user_name} - {self.amount} - {self.status}'
@@ -240,9 +240,10 @@ class Withdraw(models.Model):
     user = models.ForeignKey(NewUser, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     wallet_address = models.CharField(max_length=100)
+    wallet_name = models.CharField(max_length=50,  blank=True, null=True)
     status =  status = models.CharField(max_length=10, choices=STATUS_CHOICES)
     transaction_id = models.CharField(max_length=16, unique=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now) 
     
     def __str__(self):
         return f'{self.user.user_name} - {self.amount} - {self.status}'
@@ -272,13 +273,21 @@ class InvestmentPlan(models.Model):
         ('monthly', 'Monthly'),
         ('yearly', 'Yearly'),
     ]
-    
+    plan_id = models.CharField(max_length=16, unique=True, blank=True)
     plan_name = models.CharField(max_length=100)
     min_amount = models.DecimalField(max_digits=10, decimal_places=2)
     max_amount = models.DecimalField(max_digits=10, decimal_places=2)
     percentage_return = models.DecimalField(max_digits=5, decimal_places=2)
     duration = models.CharField(max_length=100)
     time_rate = models.CharField(max_length=10, choices=TIME_RATE_CHOICES, default='none')
+    
+    def save(self, *args, **kwargs):
+        if not self.plan_id:
+            self.plan_id = self.generate_plan_id()
+            
+            
+    def generate_plan_id(self):
+        return secrets.token_hex(8).upper()
     def __str__(self):
         return self.plan_name
     
@@ -294,6 +303,7 @@ class UserInvestment(models.Model):
         ('awaiting', 'Awaiting'),
         ('active', 'Active'),
         ('completed', 'Completed'),
+        ('canceled', 'Canceled'),
     ]
     
     TYPE_CHOICES = [
@@ -309,6 +319,7 @@ class UserInvestment(models.Model):
     net_profit =  models.DecimalField(max_digits=10, decimal_places=2)
     total_intrest_return =  models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     current_intrest_return = models.DecimalField(max_digits=10, decimal_places=2)
+    adjustment = models.IntegerField(default=0)
     approval_status  = models.CharField(max_length=10, choices=APPROVAL_CHOICES, default='pending')
     investment_status = models.CharField(max_length=20, choices=INVESTMENT_STATUS_CHOICES, default='awaiting')
     investment_begins = models.DateTimeField(blank=True, null=True)
@@ -325,7 +336,12 @@ class UserInvestment(models.Model):
             self.investment_id = self.generate_investment_id()
         
         if self.approval_status == 'successful' and self.investment_status != 'active':
-            self.approve_investment()      
+            self.approve_investment()   
+            
+        if self.approval_status == 'declined':
+            self.investment_status = 'canceled'   
+            
+            
         self.investment_time_rate = self.investment_plan.time_rate    
         self.return_profit = self.generate_return_profit()
         self.net_profit = self.generate_net_profit()
@@ -391,8 +407,10 @@ class InvestmentIntrest(models.Model):
     
     
     def addIntrest(self):
+        now = timezone.now()
         investment_plan = UserInvestment.objects.get(user=self.user, investment_id=self.investment_id)
         investment_plan.current_intrest_return = Decimal(investment_plan.current_intrest_return) + self.amount
+        investment_plan.last_update_time = now
         investment_plan.save()
 
 

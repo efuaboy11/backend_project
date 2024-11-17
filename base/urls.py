@@ -70,17 +70,19 @@ urlpatterns = [
     
     #User Investment
     path('user-investment/', UserInvestmentView.as_view(), name='user-investment'),  
-    path('user-investment/<int:pk>', UserInvestmentRetriveUpdateDestoryView.as_view(), name='delete-investment'),
+    path('user-investment/<int:pk>/', UserInvestmentRetriveUpdateDestoryView.as_view(), name='delete-investment'),
     path('user-investment/active/', ActiveInvestmentView.as_view(), name='active-investment'),  
     path('user-investment/pending/', PendingInvestmentView.as_view(), name='awaiting-investment'),  
     path('user-investment/completed/', CompletedInvestmentView.as_view(), name='completed-investment'),  
     path('user-investment/declined/', DeclinedInvestmentView.as_view(), name='declined-investment'), 
     path('user-investment/<int:pk>/update-status/', UserInvestmentUpdateStatusView.as_view(), name='status-update-investment'), 
     path('user-investment/<int:pk>/update-type/', UserInvestmentUpdateTypeView.as_view(), name='type-update-investment'), 
+    path('user-investment/add-money/', AddMoneyToInvestmentView.as_view(), name='add-money-to-investment'),
     # cash out 
     path('cashout/', CashoutView.as_view(), name='cashout'),  
     # Investment Intrest
     path('investment-intrest/', InvestmentIntrestView.as_view(), name='investment-intrest'), 
+    path('investment-intrest/filter/', FilteredInvestmentIntrestView.as_view(), name='investment-intrest'), 
     # Bonus 
     path('bonus/', BonusView.as_view(), name='Bonus'), 
     

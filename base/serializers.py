@@ -329,7 +329,7 @@ class WithdrawSerializer(serializers.ModelSerializer):
     user_details = serializers.SerializerMethodField()
     class Meta:
         model = Withdraw
-        fields = ['id', 'transaction_id', 'user', 'user_details', 'amount',  'wallet_address', 'status', 'created_at']
+        fields = ['id', 'transaction_id', 'user', 'user_details', 'amount',  'wallet_address', 'wallet_name', 'status', 'created_at']
         read_only_fields = ['created_at', 'transaction_id']
         
     def get_user_details(self, obj):
@@ -399,6 +399,7 @@ class UserInvestmentSerialiser(serializers.ModelSerializer):
             'net_profit',
             'total_intrest_return',
             'current_intrest_return',
+            'adjustment',
             'approval_status',
             'investment_status',
             'investment_begins',
@@ -420,7 +421,8 @@ class UserInvestmentSerialiser(serializers.ModelSerializer):
             'return_profit', 
             'net_profit',   
             'total_intrest_return',  
-            'current_intrest_return',  
+            'current_intrest_return',
+            'adjustment',  
             'investment_begins', 
             'investment_ends', 
             'investment_time_rate',   
@@ -481,6 +483,58 @@ class UserInvestmentUpdateTypeSerialiser(serializers.ModelSerializer):
         instance.investment_type = new_type
         instance.save()
         return instance
+    
+#Adjust investment
+class AddMoneyToInvestmentSerializer(serializers.Serializer):
+    user_id = serializers.UUIDField()
+    investment_id = serializers.CharField()
+    amount_add = serializers.FloatField()
+    
+    def validate(self, data):
+        user_id = data.get('user_id')
+        investment_id = data.get('investment_id')
+        try:
+            user = NewUser.objects.get(id=user_id)
+        except:
+            raise serializers.ValidationError('User does not exist')
+        
+        try:
+            investment = UserInvestment.objects.get(user=user, investment_id=investment_id)
+        except:
+            raise serializers.ValidationError('No Investment with this details')
+        
+        if investment.adjustment > 5:
+            raise serializers.ValidationError('You have reached your limit')
+        
+        
+        
+        if investment.investment_status != 'active':
+            raise serializers.ValidationError('Investment must be active')
+            
+        
+        return data
+    
+    def create(self, validated_data):
+        amount = Decimal(validated_data['amount_add'])
+        try:
+            user_balance = UserBalance.objects.get(user=validated_data['user_id'])
+            if amount > Decimal(user_balance.balance):
+                raise serializers.ValidationError('Insufficient Funds')
+            
+            user_balance.balance = Decimal(user_balance.balance) - amount
+            user_balance.save()
+            
+            
+        except UserBalance.DoesNotExist:
+            raise serializers.ValidationError('User balance does not exist')
+            
+                
+        investment = UserInvestment.objects.get(user=validated_data['user_id'], investment_id=validated_data['investment_id'])
+        investment.amount +=  Decimal(validated_data['amount_add'])
+        investment.adjustment += 1
+        investment.save()
+        
+        return {"Money has been added successfully"}
 
 # Investment intrest
 class InvestmentIntrestSerializer(serializers.ModelSerializer):
@@ -494,6 +548,8 @@ class InvestmentIntrestSerializer(serializers.ModelSerializer):
         user = obj.user
         serializers = RegisterUserSerializer(instance=user, many=False)
         return serializers.data
+    
+   
 
 # cashout    
 class cashoutSerializer(serializers.ModelSerializer):
