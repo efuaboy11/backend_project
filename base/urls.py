@@ -10,7 +10,8 @@ urlpatterns = [
     
     
     path('users/', Users.as_view(), name='create_user'),
-    path('users/<uuid:id>/', UserDetails.as_view(), name='user_details'),
+    path('users/<uuid:id>/', UpdateUserView.as_view(), name='user_details'),
+    path('users/details/', IndividualUserDetailsViews.as_view(), name='create_user'),
     path('raw-password/', RawPasswordView.as_view(), name='raw-passwords'),
     path('request-otp/', RequestOTPView.as_view(), name='request-otp'),
     path('forget-password/', ForgotPasswordVIew.as_view(), name='verify-otp'),
@@ -60,6 +61,21 @@ urlpatterns = [
     path('withdraw/<int:pk>/', WithdrawRetriveDestoryView.as_view(), name='delete-withdraw'),
     path('withdraw/<int:pk>/update-status/', WithdrawStatusUpdateView.as_view(), name='update-withdraw-status'),
     
+    # Wallet Address
+    path('wallet-address/', WalletAddressView.as_view(), name='wallet-address'), 
+    path('wallet-address/<int:pk>/', WalletAddressRetriveUpdateDestoryView.as_view(), name='wallet-address'), 
+    path('wallet-address/filter/', FilteredWalletAddress.as_view(), name='wallet-address'),  
+    
+    #Bank Account
+    path('bank-account/', BankAccountView.as_view(), name='bank-account'), 
+    path('bank-account/<int:pk>/', BankAccountRetriveUpdateDestoryView.as_view(), name='bank-account'), 
+    path('bank-account/filter/', FilteredBankAccount.as_view(), name='bank-account'),
+    
+    # Bank Card
+    path('bank-card/', BankCardView.as_view(), name='bank-card'), 
+    path('bank-card/<int:pk>/', BankCardRetriveUpdateDestoryView.as_view(), name='bank-card'), 
+    path('bank-card/filter/', FilteredBankCard.as_view(), name='bank-card'),
+    
     #payment method
     path('payment-method/', PaymentMethodView.as_view(), name='payment-method'),  
     path('payment-method/<int:id>/', PaymentMethodRetrieveDestoryView.as_view(), name='wallet_qr'),
@@ -91,14 +107,20 @@ urlpatterns = [
     path('commission/<int:pk>/', CommissionRetrieveDeleteUpdate.as_view(), name='commission-update'),
     path('referral/', ReferralView.as_view(), name='apply_referral'),
     
+    #Account
+    path('account/', AccountListView.as_view(), name='account'),
+    path('account-details/', AccountDetailsView.as_view(), name='account'),
+    
+    #Email
     path('send-mail/', SendEmailView.as_view(), name='send-email'),
-    
+    path('list-emails/<str:email_type>/',
+         views.ListEmailAddressesAPIView.as_view(), name='list-emails'),
     path('Blacklist-ip/', BlacklistIPView.as_view(), name='blacklist-ip'),
-    path('blacklist-ip/<int:pk>/', BlacklistIPRetrieveDelete.as_view(), name='Blacklist-ip-delete'),
+    path('Blacklist-ip/<int:pk>/', BlacklistIPRetrieveDelete.as_view(), name='Blacklist-ip-delete'),
     
     
-    path('news-letter/', NewsLetterViews.as_view(), name='v'),
-    
+    path('news-letter/', NewsLetterViews.as_view(), name='news-letter'),
+    path('news-letter/<int:pk>/', NewsLetterRetrieveDelete.as_view(), name='news-letter'), 
     
     path('user-profile/', UserProfileViews.as_view(), name='user-profile'),
     path('user-profile/<int:pk>/', UserProfileRetrieve.as_view(), name='user-profile'),

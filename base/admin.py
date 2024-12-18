@@ -10,5 +10,7 @@ admin.site.register(KYCverification)
 admin.site.register(UserInvestment)
 admin.site.register(Withdraw)
 admin.site.register(InvestmentIntrest)
+admin.site.register(InvestmentPlan)
 admin.site.register(RawPassword)
 admin.site.register(UserProfile)
+

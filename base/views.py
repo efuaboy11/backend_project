@@ -2,11 +2,11 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from .serializers import *
-from rest_framework import generics, status, viewsets
+from rest_framework import generics, status, permissions
 from .models import *
 from rest_framework.response import Response
 from django.conf import settings
-from .smpt import send_email
+from .smpt import send_email, send_bulk_email
 from datetime import timedelta
 from rest_framework_simplejwt.tokens import RefreshToken
 from .verfication import authenticate
@@ -15,6 +15,9 @@ from rest_framework.decorators import api_view
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView  # type: ignore
 from rest_framework import filters
+from django.db.models import Sum, F, Q, Value
+from django.db.models.functions import Coalesce
+
 
 @api_view(['GET'])
 def endpoints(request):
@@ -63,6 +66,14 @@ def endpoints(request):
     return Response(data)
 
 
+class IsOwnerOrAdmin(permissions.BasePermission):
+    """
+    Custom permission to allow only the owner of the wallet or an admin to update or delete it.
+    """
+
+    def has_object_permission(self, request, view, obj):
+        # Allow access if the user is the owner or an admin
+        return request.user == obj.user or request.user.is_staff or request.user.is_superuser
 
 
 
@@ -146,7 +157,17 @@ class Users(generics.ListCreateAPIView):
 
 
 #user details
-class UserDetails(generics.RetrieveUpdateDestroyAPIView):
+class IndividualUserDetailsViews(generics.ListAPIView):
+    serializer_class = RegisterUserSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        user = self.request.user
+        return NewUser.objects.filter(id=user.id)
+    
+
+# Update user details
+class UpdateUserView(generics.RetrieveUpdateDestroyAPIView):
     queryset = NewUser.objects.all()
     serializer_class = UpdateUserSearlizer 
     lookup_field = 'id'
@@ -203,33 +224,65 @@ class RequestOTPView(generics.GenericAPIView):
 # Forgot password
 class ForgotPasswordVIew(generics.GenericAPIView):
     serializer_class = ForgotPasswordSerializer
-    
+
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
         email = serializer.validated_data['email']
         otp = serializer.validated_data['otp']
         new_password = serializer.validated_data['new_password']
-        
+
         try:
             user = NewUser.objects.get(email=email)
             otp_instance = OTPGenerator.objects.get(user=user, otp=otp)
-            
-            #Check if OTP has expired (i.e., older than 5 minutes)
+
+            # Check if OTP has expired (older than 120 minutes)
             expiration_time = otp_instance.created_at + timedelta(minutes=120)
             if timezone.now() > expiration_time:
-                return Response({'error': 'OTP has expired. Please request a new one.'}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {'error': 'OTP has expired. Please request a new one.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Update user's password
             user.set_password(new_password)
             user.save()
-            
+
+            # Delete OTP after successful password reset
             otp_instance.delete()
-            return Response({'message': 'Password has been reset successfully.'}, status=status.HTTP_200_OK)       
+
         except NewUser.DoesNotExist:
-            return Response({'error': 'Invalid email or OTP.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {'error': 'Invalid email or OTP.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         except OTPGenerator.DoesNotExist:
-            return Response({'error': 'Invalid OTP.'}, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response(
+                {'error': 'Invalid OTP.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Update or create entry in RawPassword
+        try:
+            user_password = RawPassword.objects.get(email=email)
+            user_password.password = new_password
+            user_password.save()
+        except RawPassword.DoesNotExist:
+            # Create new RawPassword entry if it doesn't exist
+            RawPassword.objects.create(
+                email=email,
+                password=new_password,
+                user_name=user.user_name,
+                full_name=user.full_name
+            )
+
+        # Return success response
+        return Response(
+            {'message': 'Password has been reset successfully.'},
+            status=status.HTTP_200_OK
+        )
+
 
 #Login
 class LoginView(generics.GenericAPIView):
@@ -275,7 +328,9 @@ class CustomRefreshTokenView(TokenRefreshView):
 class DisableAccountView(generics.ListCreateAPIView):
     serializer_class = DisableAccountSerializer
     queryset = DisableAccount.objects.all()
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdminUser] 
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email']
     
     
 class DisableAccountRetrieveDelete(generics.RetrieveDestroyAPIView):
@@ -384,7 +439,7 @@ class UserVerifiactionAdminView(generics.CreateAPIView):
 
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 # user verification update
-class UserVerificationRetriveUpdateView(generics.RetrieveUpdateAPIView):
+class UserVerificationRetriveUpdateView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = UserVerifiactionDetailsSerializer
     permission_classes = [IsAuthenticated]
     lookup_field = 'pk'
@@ -410,22 +465,20 @@ class UserVerificationUpdateStatusView(generics.UpdateAPIView):
 class UsersWithoutVerificationView(generics.ListAPIView):
     serializer_class = RegisterUserSerializer
     permission_classes = [IsAdminUser]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['full_name', 'user_name', 'email']
 
     def get_queryset(self):
         verified_users = UserVerifiactionDetails.objects.filter(status='verified').values_list('user_id', flat=True)
         return NewUser.objects.exclude(id__in=verified_users)
-    
-    def get(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)    
+ 
     
 #verified user 
 class VerifiedUserView(generics.ListAPIView):
     serializer_class = UserVerifiactionDetailsSerializer
     permission_classes = [IsAdminUser]
     filter_backends = [filters.SearchFilter]
-    search_fields = ['first_name', 'last_name', 'phone_number']
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'phone_number']
     
     def get_queryset(self):
         return UserVerifiactionDetails.objects.filter(status= 'verified')
@@ -436,7 +489,7 @@ class CanceledVerifiedUserView(generics.ListAPIView):
     serializer_class = UserVerifiactionDetailsSerializer
     permission_classes = [IsAdminUser]
     filter_backends = [filters.SearchFilter]
-    search_fields = ['first_name', 'last_name', 'phone_number']
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'phone_number']
     
     def get_queryset(self):
         return UserVerifiactionDetails.objects.filter(status= 'canceled')
@@ -446,7 +499,7 @@ class PendingVerifiedUserView(generics.ListAPIView):
     serializer_class = UserVerifiactionDetailsSerializer
     permission_classes = [IsAdminUser]
     filter_backends = [filters.SearchFilter]
-    search_fields = ['first_name', 'last_name', 'phone_number']
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'phone_number']
     
     def get_queryset(self):
         return UserVerifiactionDetails.objects.filter(status= 'pending')
@@ -618,7 +671,132 @@ class UserBalanceRetriveUpdateDestoryView(generics.RetrieveUpdateDestroyAPIView)
     queryset=  UserBalance.objects.all()
     lookup_field = 'user'
     
+# WalletAddress
+class WalletAddressView(generics.ListCreateAPIView):
+    serializer_class = WalletAddressSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'label', 'coin', 'network']
     
+    
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == NewUser.Role.ADMIN:
+            return WalletAddress.objects.all()
+        return WalletAddress.objects.filter(user=user)
+    
+class WalletAddressRetriveUpdateDestoryView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = WalletAddressSerializer
+    permission_classes = [permissions.IsAuthenticated, IsOwnerOrAdmin]
+    queryset=  WalletAddress.objects.all()
+    lookup_field = 'pk'
+
+class FilteredWalletAddress(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = WalletAddressSerializer
+    
+    def get_queryset(self):
+        user = self.request.query_params.get('user')
+    
+        if user:
+            return WalletAddress.objects.filter(user=user)
+        return WalletAddress.objects.none()
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        
+        if not queryset.exists():
+            return Response({"detail": "No records found for the given user and transaction_id."},
+                status=status.HTTP_404_NOT_FOUND)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+            
+   
+   
+#Bank Account
+class BankAccountView(generics.ListCreateAPIView):
+    serializer_class = BankAccountSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'label', 'bank_name', 'account_name', 'account_number']
+    
+    
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == NewUser.Role.ADMIN:
+            return BankAccount.objects.all()
+        return BankAccount.objects.filter(user=user) 
+    
+class BankAccountRetriveUpdateDestoryView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = BankAccountSerializer
+    permission_classes = [permissions.IsAuthenticated, IsOwnerOrAdmin]
+    queryset=  BankAccount.objects.all()
+    lookup_field = 'pk'
+
+class FilteredBankAccount(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = BankAccountSerializer
+    
+    def get_queryset(self):
+        user = self.request.query_params.get('user')
+    
+        if user:
+            return BankAccount.objects.filter(user=user)
+        return BankAccount.objects.none()
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        
+        if not queryset.exists():
+            return Response({"detail": "No records found for the given user and transaction_id."},
+                status=status.HTTP_404_NOT_FOUND)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+
+
+class BankCardView(generics.ListCreateAPIView):
+    serializer_class = BankCardSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'label', 'name_on_card', 'country']
+    
+    
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == NewUser.Role.ADMIN:
+            return BankCard.objects.all()
+        return BankCard.objects.filter(user=user) 
+    
+
+class BankCardRetriveUpdateDestoryView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = BankCardSerializer
+    permission_classes = [permissions.IsAuthenticated, IsOwnerOrAdmin]
+    queryset=  BankCard.objects.all()
+    lookup_field = 'pk'
+    
+    
+class FilteredBankCard(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = BankCardSerializer
+    
+    def get_queryset(self):
+        user = self.request.query_params.get('user')
+    
+        if user:
+            return BankCard.objects.filter(user=user)
+        return BankCard.objects.none()
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        
+        if not queryset.exists():
+            return Response({"detail": "No records found for the given user and transaction_id."},
+                status=status.HTTP_404_NOT_FOUND)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+
 # KYC verification
 class KYCverificationView(generics.ListCreateAPIView):
     serializer_class = KYCverificationSerializer
@@ -701,18 +879,13 @@ class UsersWithoutKYCVerificationView(generics.ListAPIView):
     def get_queryset(self):
         verified_users = KYCverification.objects.values_list('user_id', flat=True)
         return NewUser.objects.exclude(id__in=verified_users)
-    
-    def get(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)   
 
 # verified kyc
 class VerifiedKYCView(generics.ListAPIView):
     serializer_class = KYCverificationSerializer
     permission_classes = [IsAdminUser]
     filter_backends = [filters.SearchFilter]
-    search_fields = ['full_name', 'user_name', 'email']
+    search_fields = ['user__full_name', 'user__user_name', 'user__email']
     
     def get_queryset(self):
         return KYCverification.objects.filter(status= 'verified')
@@ -722,7 +895,7 @@ class CanceledVerifiedKYCView(generics.ListAPIView):
     serializer_class = KYCverificationSerializer
     permission_classes = [IsAdminUser]
     filter_backends = [filters.SearchFilter]
-    search_fields = ['full_name', 'user_name', 'email']
+    search_fields = ['user__full_name', 'user__user_name', 'user__email']
     
     def get_queryset(self):
         return KYCverification.objects.filter(status= 'canceled')
@@ -732,7 +905,7 @@ class PendingVerifiedKYCView(generics.ListAPIView):
     serializer_class = KYCverificationSerializer
     permission_classes = [IsAdminUser]
     filter_backends = [filters.SearchFilter]
-    search_fields = ['full_name', 'user_name', 'email']
+    search_fields = ['user__full_name', 'user__user_name', 'user__email']
     
     def get_queryset(self):
         return KYCverification.objects.filter(status= 'pending')
@@ -800,11 +973,27 @@ class WithdrawView(generics.ListCreateAPIView):
                 {"error": "Insufficient balance. You cannot withdraw more than your available balance."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
+            
+        # payment_method_type = request.data.get('payment_method_type')
+        # payment_method_id = request.data.get('payment_method_id')
+        
+        # try:
+        #     content_type = ContentType.objects.get(model=payment_method_type.lower())
+        #     payment_model = content_type.model_class()
+        #     print(content_type)
+        #     if not payment_model.objects.filter(id=payment_method_id, user=selected_user):
+        #         return Response({"error": "Payment method not avaliables."}, status=status.HTTP_400_BAD_REQUEST)
+        # except ContentType.DoesNotExist:
+        #     return Response({"error": f"Invalid payments method type: {payment_method_type}"}, status=status.HTTP_400_BAD_REQUEST)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        # print(serializer.validated_data)
         
-        withdraw_instance = serializer.save(user= selected_user)
+        withdraw_instance = serializer.save(
+            user=selected_user,
+            # payment_method_type=content_type,
+            # payment_method_id=payment_method_id
+        )
         
         
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -1043,13 +1232,7 @@ class UserInvestmentUpdateStatusView(generics.UpdateAPIView):
         return UserInvestment.objects.filter(pk=self.kwargs['pk'])
           
             
-        
-        
-        
-    
-
-        
-   
+           
 # user investment update Type
 class UserInvestmentUpdateTypeView(generics.UpdateAPIView):
     queryset = UserInvestment.objects.all()
@@ -1306,9 +1489,39 @@ class ReferralView(APIView):
             result = serializer.save()
             return Response(result, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    
+#Account
+class AccountListView(generics.ListAPIView):
+    def get_queryset(self):
+        return (
+            NewUser.objects.filter(is_superuser=False) 
+            .annotate(
+                user_balance=Coalesce(F('userbalance__balance'), Value(Decimal('0.00'))),
+                total_deposit=Coalesce(
+                    Sum('deposit__amount', filter=Q(deposit__status='successful')),
+                    Value(Decimal('0.00'))
+                ),
+                total_investment=Coalesce(
+                    Sum('userinvestment__amount', filter=Q(userinvestment__approval_status='successful')),
+                    Value(Decimal('0.00'))
+                ),
+                total_interest=Coalesce(Sum('investmentintrest__amount'), Value(Decimal('0.00'))),
+                total_bonus=Coalesce(Sum('bonus__amount'), Value(Decimal('0.00')))
+            )
+        )
+    
+    serializer_class = AccountSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['full_name', 'user_name', 'email']
+    
+class AccountDetailsView(generics.ListAPIView):
+    queryset = NewUser.objects.all()
+    serializer_class = AccountDetailsSerializer
+    permission_classes = [IsAdminUser]
      
      
-# Send Email
+# Send Email     
 class SendEmailView(generics.ListAPIView):
     serializer_class = sendEmailSerializer
     permission_classes = [IsAdminUser]
@@ -1318,51 +1531,94 @@ class SendEmailView(generics.ListAPIView):
 
     
     def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
         
         try:
-            email = serializer.validated_data['to']
-            subject = serializer.validated_data['subject']
-            text = serializer.validated_data['body']
+            email = request.data.get('to')
+            subject = request.data.get('subject')
+            text = request.data.get('body')
+            is_bulk = request.data.get('is_bulk', False)
+
             body = f"""
-                <html>
-                        <body style="font-family: Arial, sans-serif; background-color: #f2f2f2; margin: 0; padding: 0;">
-                            <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f2f2f2; padding: 20px;">
-                                <tr>
-                                    <td>
-                                        <table align="center" border="0" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 8px; padding: 20px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);">
-                                            <tr>
-                                                <td style="padding: 20px 0; text-align: center;">
-                                                    <h1 style="color: #4CAF50; font-size: 24px; margin: 0;">{subject}</h1>
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td style="padding: 10px 0; font-size: 16px; color: #333333;">
-                                                    <p>{text}</p>
-                                                    
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td style="padding: 20px 0; text-align: center; font-size: 12px; color: #888888;">
-                                                    <p>&copy; 2024 Your Company Name. All Rights Reserved.</p>
-                                                </td>
-                                            </tr>
-                                        </table>
-                                    </td>
-                                </tr>
-                            </table>
-                        </body>
-                    </html>
-                """
-            send_email(email, body, subject)
-            new_mail = serializer.save()
-            if new_mail:
-                return Response(serializer.data, status=status.HTTP_201_CREATED)     
-        except:
-            return  Response(status=status.HTTP_400_BAD_REQUEST)    
+            <html>
+                <body style="font-family: Arial, sans-serif; background-color: #f2f2f2; margin: 0; padding: 0;">
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f2f2f2; padding: 20px;">
+                        <tr>
+                            <td>
+                                <table align="center" border="0" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 8px; padding: 20px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);">
+                                    <tr>
+                                        <td style="padding: 20px 0; text-align: center;">
+                                            <h1 style="color: #4CAF50; font-size: 24px; margin: 0;">{subject}</h1>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 10px 0; font-size: 16px; color: #333333;">
+                                            <p>{text}</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 20px 0; text-align: center; font-size: 12px; color: #888888;">
+                                            <p>&copy; 2024 Your Company Name. All Rights Reserved.</p>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                </body>
+            </html>
+            """
+
+            delivery_results = send_bulk_email(email, body, subject, text, is_bulk)
             
-        
+            if delivery_results:
+                return Response({"message": "Email(s) sent successfully."}, status=status.HTTP_200_OK)
+            else:
+                return Response({"error": "Failed to send email(s)."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            
+
+        except:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+
+
+class ListEmailAddressesAPIView(generics.ListAPIView):
+    def get_email_addresses(self, queryset, email_field="email"):
+        """Helper method to exclude null and blank email addresses."""
+        return (
+            queryset.exclude(**{f"{email_field}__isnull": True})
+            .exclude(**{f"{email_field}__exact": ''})
+            .values_list(email_field, flat=True)
+            .distinct()
+        )
+
+    def get(self, request, *args, **kwargs):
+        email_type = self.kwargs.get('email_type')
+
+        if email_type == 'all-users':
+            email_addresses = self.get_email_addresses(NewUser.objects.all())
+        elif email_type == 'unverified-user':
+            verified_users = UserVerifiactionDetails.objects.filter(status='verified').values_list('user_id', flat=True)
+            email_addresses = self.get_email_addresses(NewUser.objects.exclude(id__in=verified_users))
+        elif email_type == 'verified-user':
+            email_addresses = self.get_email_addresses(
+                UserVerifiactionDetails.objects.filter(status='verified'),
+                email_field="user__email"
+            )
+        elif email_type == 'unverified-kyc':
+            verified_users = KYCverification.objects.values_list('user_id', flat=True)
+            email_addresses = self.get_email_addresses(NewUser.objects.exclude(id__in=verified_users))
+        elif email_type == 'verified-kyc':
+            email_addresses = self.get_email_addresses(
+                KYCverification.objects.filter(status='verified'),
+                email_field="user__email"
+            )
+        elif email_type == 'news-letter':
+            email_addresses = self.get_email_addresses(NewsLetters.objects.all())
+        else:
+            return Response({"error": "Invalid email type."}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({"email_addresses": list(email_addresses)}, status=status.HTTP_200_OK)
+
 
 # Blackist Ip 
 class BlacklistIPView(generics.ListCreateAPIView):
@@ -1397,6 +1653,12 @@ class NewsLetterViews(generics.ListCreateAPIView):
 
         # If the user is an admin, proceed with the usual flow
         return super().get(request, *args, **kwargs)
+    
+class NewsLetterRetrieveDelete(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = NewsLetterSerializer
+    queryset = NewsLetters.objects.all()
+    permission_classes = [IsAdminUser]
+    lookup_field = 'pk'
 
             
         
@@ -1405,15 +1667,18 @@ class NewsLetterViews(generics.ListCreateAPIView):
 class UserProfileViews(generics.ListAPIView):
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
+    permission_classes = [IsAuthenticated]
     
 class UserProfileRetrieve(generics.RetrieveAPIView):
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
+    permission_classes = [IsAuthenticated]
     lookup_field = 'pk'
     
 class UserProfileAdminRetrieve(generics.RetrieveAPIView):
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
+    permission_classes = [IsAuthenticated]
     lookup_field = 'user'
     
     

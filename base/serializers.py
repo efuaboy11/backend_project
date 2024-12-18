@@ -5,12 +5,12 @@ from decimal import Decimal
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken, Token
 from rest_framework.exceptions import AuthenticationFailed
-
+from django.contrib.contenttypes.models import ContentType
 
 class RegisterUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = NewUser
-        fields = ('id','email', 'user_name', 'full_name',  'password', 'date_joined')
+        fields = ('id','email', 'user_name', 'full_name',  'password', 'profile_photo', 'status',  'date_joined')
         
         extra_kwargs = {
             'password': {'write_only': True},  # Hide password in response
@@ -32,7 +32,7 @@ class RegisterUserSerializer(serializers.ModelSerializer):
 class UpdateUserSearlizer(serializers.ModelSerializer):
     class Meta:
         model = NewUser
-        fields = ['email', 'user_name', 'full_name']
+        fields = ['id', 'email', 'user_name', 'full_name', 'profile_photo']
     
 
 # Raw password
@@ -61,7 +61,7 @@ class DisableAccountSerializer(serializers.ModelSerializer):
         
     def get_user_details(self, obj):
         user = obj.user
-        serializers = RegisterUserSerializer(instance=user, many=False)
+        serializers = RegisterUserSerializer(instance=user, context=self.context,  many=False)
         return serializers.data
 
 
@@ -161,7 +161,7 @@ class UserVerifiactionDetailsSerializer(serializers.ModelSerializer):
         read_only_fields = ['user', 'status', 'created_at']
     def get_user_details(self, obj):
         user = obj.user
-        serializers = RegisterUserSerializer(instance=user, many=False)
+        serializers = RegisterUserSerializer(instance=user, context=self.context, many=False)
         return serializers.data
     
     
@@ -193,8 +193,20 @@ class UserVerifiactionAdminSerializer(serializers.ModelSerializer):
                 ]
     def get_user_details(self, obj):
         user = obj.user
-        serializers = RegisterUserSerializer(instance=user, many=False)
+        serializers = RegisterUserSerializer(instance=user, context=self.context, many=False)
         return serializers.data
+    
+    def create(self, validated_data):
+        profile_photo = validated_data.pop('profile_photo', None)
+        user = validated_data.get('user')
+
+        user_verification = super().create(validated_data)
+
+        if profile_photo:
+            user.profile_photo = profile_photo
+            user.save()
+
+        return user_verification
 
 
 # User Verification Update status
@@ -229,7 +241,7 @@ class DepositSerializer(serializers.ModelSerializer):
         
     def get_user_details(self, obj):
         user = obj.user
-        serializers = RegisterUserSerializer(instance=user, many=False)
+        serializers = RegisterUserSerializer(instance=user, context=self.context, many=False)
         return serializers.data
     
     def get_payment_method_details(self, obj):
@@ -247,7 +259,7 @@ class DepositAdminSerializer(serializers.ModelSerializer):
         
     def get_users_name(self, obj):
         user = obj.user
-        serializers = RegisterUserSerializer(instance=user, many=False)
+        serializers = RegisterUserSerializer(instance=user, context=self.context, many=False)
         return serializers.data
 
 
@@ -282,8 +294,117 @@ class UserBalanceSerializer(serializers.ModelSerializer):
         
     def get_users_details(self, obj):
         user = obj.user
-        serializers = RegisterUserSerializer(instance=user, many=False)
+        serializers = RegisterUserSerializer(instance=user, context=self.context, many=False)
         return serializers.data
+    
+    
+# Wallet Address
+class WalletAddressSerializer(serializers.ModelSerializer):
+    users_details = serializers.SerializerMethodField()
+    class Meta:
+        model = WalletAddress
+        fields = ['id', 'user', 'users_details', 'label', 'walletAddress', 'coin', 'network', 'wallet_id', 'created_at']
+        read_only_fields = ['wallet_id']
+    def get_users_details(self, obj):
+        user = obj.user
+        serializers = RegisterUserSerializer(instance=user, context=self.context, many=False)
+        return serializers.data
+    
+    def create(self, validated_data):
+        return WalletAddress.objects.create(**validated_data)
+    
+    def validate(self, data):
+        request = self.context.get('request')
+        if request.user.role != 'ADMIN':
+            data['user'] = request.user
+            
+            
+        return data
+    
+class BankAccountSerializer(serializers.ModelSerializer):
+    users_details = serializers.SerializerMethodField()
+    class Meta:
+        model = BankAccount
+        fields = [
+            'id', 
+            'user', 
+            'users_details', 
+            'bank_account_id', 
+            'label',
+            'bank_name',
+            'bank_branch',
+            'bank_country',
+            'account_name',
+            'account_number',
+            'routing_number',
+            'swift_code',
+            'currency',
+            'created_at',                                  
+        ]
+        
+        read_only_fields = [ 
+            'bank_account_id',           
+        ]
+        
+    def get_users_details(self, obj):
+        user = obj.user
+        serializers = RegisterUserSerializer(instance=user, context=self.context, many=False)
+        return serializers.data
+    
+    def create(self, validated_data):
+        return BankAccount.objects.create(**validated_data)
+    
+    def validate(self, data):
+        request = self.context.get('request')
+        if request.user.role != 'ADMIN':
+            data['user'] = request.user
+            
+            
+        return data
+    
+    
+    
+class BankCardSerializer(serializers.ModelSerializer):
+    users_details = serializers.SerializerMethodField()
+    class Meta:
+        model = BankCard
+        fields = [
+            'id', 
+            'user', 
+            'users_details', 
+            'bank_card_id', 
+            'label',
+            'card_number',
+            'name_on_card',
+            'expiration_date',
+            'cvv',
+            'address',
+            'city_town',
+            'state',
+            'zip_code',
+            'country',    
+            'created_at',                             
+        ]
+        
+        read_only_fields = [ 
+            'bank_card_id',           
+        ]
+        
+    def get_users_details(self, obj):
+        user = obj.user
+        serializers = RegisterUserSerializer(instance=user, context=self.context, many=False)
+        return serializers.data
+    
+    def create(self, validated_data):
+        return BankCard.objects.create(**validated_data)
+    
+    def validate(self, data):
+        request = self.context.get('request')
+        if request.user.role != 'ADMIN':
+            data['user'] = request.user
+            
+            
+        return data
    
 
 # kYC verification 
@@ -291,12 +412,12 @@ class KYCverificationSerializer(serializers.ModelSerializer):
     users_details = serializers.SerializerMethodField()
     class Meta:
         model =  KYCverification
-        fields = ['id', 'user', 'users_details', 'document_type', 'country', 'proof_selfie', 'font_side', 'back_side', 'status']
+        fields = ['id', 'user', 'users_details', 'document_type', 'country', 'proof_selfie', 'font_side', 'back_side', 'status', 'created_at']
         read_only_fields = ['user', 'status']
         
     def get_users_details(self, obj):
         user = obj.user
-        serializers = RegisterUserSerializer(instance=user, many=False)
+        serializers = RegisterUserSerializer(instance=user, context=self.context, many=False)
         return serializers.data
   
   
@@ -305,11 +426,11 @@ class KYCverificationAdminSerializer(serializers.ModelSerializer):
     users_details = serializers.SerializerMethodField()
     class Meta:
         model =  KYCverification
-        fields = ['id', 'user', 'users_details', 'document_type', 'country', 'proof_selfie', 'font_side', 'back_side', 'status']
+        fields = ['id', 'user', 'users_details', 'document_type', 'country', 'proof_selfie', 'font_side', 'back_side', 'status', 'created_at']
         
     def get_users_details(self, obj):
         user = obj.user
-        serializers = RegisterUserSerializer(instance=user, many=False)
+        serializers = RegisterUserSerializer(instance=user, context=self.context, many=False)
         return serializers.data
  
    
@@ -327,14 +448,56 @@ class KYCVerificationUpdateStatusSerializer(serializers.ModelSerializer):
 # Withdraw
 class WithdrawSerializer(serializers.ModelSerializer):
     user_details = serializers.SerializerMethodField()
+    payment_method_name = serializers.SerializerMethodField()
+    payment_method_details = serializers.SerializerMethodField()
     class Meta:
         model = Withdraw
-        fields = ['id', 'transaction_id', 'user', 'user_details', 'amount',  'wallet_address', 'wallet_name', 'status', 'created_at']
+        fields = ['id', 'transaction_id','payment_method_type', 'payment_method_name', 'payment_method_id', 'payment_method_details',  'user', 'user_details', 'amount',  'status', 'created_at']
         read_only_fields = ['created_at', 'transaction_id']
+        
+        
+    def get_payment_method_name(self, obj):
+        try:
+            # Fetch the ContentType instance based on payment_method_type
+            content_type = ContentType.objects.get(id=obj.payment_method_type.id)
+            # Return the verbose name or model name
+            return content_type.model_class()._meta.verbose_name.title()
+        except ContentType.DoesNotExist:
+            return None
+        
+    def get_payment_method_details(self, obj):
+        try:
+            # Fetch the ContentType instance and model class
+            content_type = ContentType.objects.get(id=obj.payment_method_type.id)
+            payment_model = content_type.model_class()._meta.verbose_name.title()
+            if payment_model == "Bank Card":
+                try:
+                    bank_card = BankCard.objects.get(id=obj.payment_method_id)
+                    return BankCardSerializer(bank_card, many=False,context=self.context).data
+                except bank_card.DoesNotExist:
+                    return ''
+                
+            if payment_model == "Bank Account":
+                try:
+                    bank_account = BankAccount.objects.get(id=obj.payment_method_id)
+                    return BankAccountSerializer(bank_account, many=False,context=self.context).data
+                except bank_account.DoesNotExist:
+                    return ''
+                
+            if payment_model == "Wallet Address":
+                try:
+                    wallet_address = WalletAddress.objects.get(id=obj.payment_method_id)
+                    return WalletAddressSerializer(wallet_address, many=False,context=self.context).data         
+                except  wallet_address.DoesNotExist:
+                    return ''
+                
+                
+        except ContentType.DoesNotExist:
+            return None
         
     def get_user_details(self, obj):
         user = obj.user
-        serializers = RegisterUserSerializer(instance=user, many=False)
+        serializers = RegisterUserSerializer(instance=user, context=self.context, many=False)
         return serializers.data
     
     def create(self, validated_data):
@@ -377,7 +540,8 @@ class WithdrawStatusUpdateSerializer(serializers.ModelSerializer):
 class InvestmentPlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = InvestmentPlan
-        fields = ['id', 'plan_name', 'min_amount', 'max_amount', 'percentage_return', 'duration', 'time_rate']
+        fields = ['id', 'plan_id', 'plan_name', 'min_amount', 'max_amount', 'percentage_return', 'duration', 'time_rate']
+        read_only_fields = ['plan_id']
         
         
 #User investment
@@ -413,7 +577,6 @@ class UserInvestmentSerialiser(serializers.ModelSerializer):
             'created_at'   
         ]
         read_only_fields = [
-            'created_at', 
             'balance_deducted',
             'withdrawn',
             'cashout',
@@ -432,7 +595,7 @@ class UserInvestmentSerialiser(serializers.ModelSerializer):
     
     def get_user_details(self, obj):
         user = obj.user
-        serializers = RegisterUserSerializer(instance=user, many=False)
+        serializers = RegisterUserSerializer(instance=user, context=self.context, many=False)
         return serializers.data
     
     def get_plan_details(self, obj):
@@ -546,7 +709,7 @@ class InvestmentIntrestSerializer(serializers.ModelSerializer):
         
     def get_user_details(self, obj):
         user = obj.user
-        serializers = RegisterUserSerializer(instance=user, many=False)
+        serializers = RegisterUserSerializer(instance=user, context=self.context, many=False)
         return serializers.data
     
    
@@ -560,7 +723,7 @@ class cashoutSerializer(serializers.ModelSerializer):
         
     def get_user_details(self, obj):
         user = obj.user
-        serializers = RegisterUserSerializer(instance=user, many=False)
+        serializers = RegisterUserSerializer(instance=user, context=self.context, many=False)
         return serializers.data
     
             
@@ -570,12 +733,12 @@ class BonusSerializer(serializers.ModelSerializer):
     user_details = serializers.SerializerMethodField()
     class Meta:
         model = Bonus
-        fields = ['id', 'user', 'user_details', 'amount', 'transaction_id']
+        fields = ['id', 'user', 'user_details', 'amount', 'transaction_id', 'created_at']
         read_only_fields = ['created_at', 'transaction_id']
         
     def get_user_details(self, obj):
         user = obj.user
-        serializers = RegisterUserSerializer(instance=user, many=False)
+        serializers = RegisterUserSerializer(instance=user, context=self.context, many=False)
         return serializers.data
     
         
@@ -622,19 +785,75 @@ class ReferralSerializer(serializers.Serializer):
         return {"message": f"{commission.amount} added to {current_user.user_name}'s balance"}
     
     
+# Account   
+class AccountSerializer(serializers.ModelSerializer):
+    user_details = serializers.SerializerMethodField()
+    user_balance = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    total_deposit = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    total_investment = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    total_bonus = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = NewUser
+        fields = ['id', 'user_details', 'user_balance', 'total_deposit', 'total_investment', 'total_bonus']
+    
+    def get_user_details(self, obj):
+        return RegisterUserSerializer(instance=obj, context=self.context).data
+    
+    
+#Account Details
+class AccountDetailsSerializer(serializers.ModelSerializer):
+    user_details = serializers.SerializerMethodField()
+    user_balance = serializers.SerializerMethodField()
+    deposit = serializers.SerializerMethodField()
+    investment = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = NewUser
+        fields = ['id', 'user_details', 'user_balance', 'deposit', 'investment']
+        
+    def get_user_details(self, obj):
+        """Returns basic user details using the RegisterUserSerializer."""
+        serializer = RegisterUserSerializer(instance=obj, context=self.context)
+        return serializer.data
+
+    def get_user_balance(self, obj):
+        """Gets the balance of the user from UserBalance model."""
+        user_balance = UserBalance.objects.filter(user=obj).first()  # Retrieve user balance
+        if user_balance:  # Check if a balance exists
+            serializer = UserBalanceSerializer(instance=user_balance, context=self.context)
+            return serializer.data
+        return None  # Return None if no balance exists
+
+    def get_deposit(self, obj):
+        """Gets successful deposits of the user."""
+        deposits = Deposit.objects.filter(user=obj,)  # Retrieve deposits
+        if deposits.exists():  # Check if deposits exist
+            serializer = DepositSerializer(deposits, many=True, context=self.context)
+            return serializer.data
+        return []  # Return empty list if no deposits
+
+    def get_investment(self, obj):
+        """Gets approved investments of the user."""
+        investments = UserInvestment.objects.filter(user=obj)  # Retrieve investments
+        if investments.exists():  # Check if investments exist
+            serializer = UserInvestmentSerialiser(investments, many=True, context=self.context)
+            return serializer.data
+        return []  # Return empty list if no investments
+
     
 # Send email
 class sendEmailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Email
-        fields = ['id', 'to', 'subject', 'body', 'date']
+        fields = ['id', 'to', 'subject',  'body','delivery_status',  'date']
  
  
 # Blacklist IP
 class BlackListIPSerializer(serializers.ModelSerializer):
     class Meta:
         model = BlacklistedIP
-        fields = ['id', 'ip_address',]       
+        fields = ['id', 'ip_address', 'reason']       
     
 class NewsLetterSerializer(serializers.ModelSerializer):
     class Meta:
@@ -688,7 +907,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         ]            
     def get_user_details(self, obj):
         user_details = NewUser.objects.get(id=obj.user.id)
-        return RegisterUserSerializer(user_details, context=self.context).data
+        return RegisterUserSerializer(user_details,  context=self.context).data
 
     def get_user_verification(self, obj):
         user_verification = UserVerifiactionDetails.objects.filter(user=obj.user.id)
@@ -722,7 +941,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             user_balance = UserBalance.objects.get(user=obj.user.id)
             return UserBalanceSerializer(user_balance, context=self.context).data
         except UserBalance.DoesNotExist:
-            return {"none"}  # Default value or an empty response
+            return []  # Default value or an empty response
 
     
     def get_kyc_verification(self, obj):
@@ -730,7 +949,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             kyc_verification = KYCverification.objects.get(user=obj.user.id)
             return KYCverificationSerializer(kyc_verification,  context=self.context).data
         except KYCverification.DoesNotExist:
-            return {"none"} 
+            return [] 
     def get_all_withdraw(self, obj):
         all_withdraw = Withdraw.objects.filter(user=obj.user.id)
         return WithdrawSerializer(all_withdraw, many=True, context=self.context).data

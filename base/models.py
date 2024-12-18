@@ -9,6 +9,8 @@ from decimal import Decimal
 from django.core.files import File
 import qrcode
 from io import BytesIO
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 # Custom manager for NewUser model
 class CustomAccountManager(BaseUserManager):
 
@@ -44,6 +46,13 @@ class CustomAccountManager(BaseUserManager):
 
 # NewUser model
 class NewUser(AbstractBaseUser, PermissionsMixin):
+    STATUS_CHOICES = [
+        ('verified', 'Verified'),
+        ('canceled', 'Canceled'),
+        ('pending', 'Pending'),
+    ]
+    
+    
     class Role(models.TextChoices):
         ADMIN = "ADMIN", "Admin"
         USER = "USER", "User"
@@ -54,8 +63,10 @@ class NewUser(AbstractBaseUser, PermissionsMixin):
     start_date = models.DateField(default=timezone.now)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
-    role = models.CharField(max_length=50, choices=Role.choices, default=Role.USER)  # Default to USER
+    role = models.CharField(max_length=50, choices=Role.choices, default=Role.USER)  
+    profile_photo = models.ImageField(upload_to='profile_img/',  null=True, blank=True)
     referred_users = models.ManyToManyField('self', symmetrical=False, related_name='referrers', blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
     date_joined = models.DateTimeField(default=timezone.now)
     # Use the custom account manager
     objects = CustomAccountManager()
@@ -105,7 +116,18 @@ class UserVerifiactionDetails(models.Model):
 
     ssn = models.CharField(max_length=30, blank=True, null=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    
+    def save(self, *args, **kwargs):
+        if self.status == 'verified':
+            self.update_user_status()
+            
+        super(UserVerifiactionDetails, self).save(*args, **kwargs)
+        
+    def update_user_status(self):
+        user = NewUser.objects.get(id=self.user.id)      
+        user.status = 'verified' 
+        user.save()
     
     def __str__(self):
         return f'userVerification {self.user.user_name}'
@@ -208,6 +230,132 @@ class Deposit(models.Model):
     def generate_transaction_id(self):
         return secrets.token_hex(8).upper()
 
+# Wallet Address
+class WalletAddress(models.Model):
+    COIN_CHOICES = [
+        ('bitcoin', 'Bitcoin'),
+        ('ethereum', 'Ethereum'),
+        ('tether', 'Tether'),
+        ('litecoin', 'Litecoin'),
+        ('ripple', 'Ripple'),
+        ('cardano', 'Cardano'),
+        ('dogecoin', 'Dogecoin'),
+        ('stellar', 'Stellar'),                
+    ]
+    
+    NETWORK_CHOICES = [
+        ('BEP2', 'BEP2'),
+        ('BEP20', 'BEP20'),
+        ('ERC20', 'ERC20'),
+        ('OMNI', 'OMNI'),
+        ('TRC20', 'TRC20'),
+    ]
+    
+    user = models.ForeignKey(NewUser, on_delete=models.CASCADE)
+    label = models.CharField(max_length=100)
+    walletAddress = models.CharField(max_length=100)
+    coin = models.CharField(max_length=100, choices=COIN_CHOICES)
+    network = models.CharField(max_length=100, choices=NETWORK_CHOICES)
+    wallet_id = models.CharField(max_length=16, unique=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now) 
+    def __str__(self):
+        return f'{self.user.user_name} - {self.coin}'
+    
+    
+    def save(self, *args, **kwargs):
+        if not self.wallet_id:
+            self.wallet_id = self.generate_wallet_id()
+        
+        super(WalletAddress, self).save(*args, **kwargs)
+    
+    
+    def generate_wallet_id(self):
+        return secrets.token_hex(8).upper()
+    
+# Bank Account
+class BankAccount(models.Model):
+    CURRENCY_CHOICES = [
+        ('united states dollar', 'United States Dollar'),
+        ('euro', 'Euro'),
+        ('british pound', 'British Pound'),
+        ('japanese yen', 'Japanese Yen'),
+        ('canadian dollar', 'Canadian Dollar'),
+        ('australian dollar', 'Australian Dollar'),
+        ('swiss franc', 'Swiss Franc'),
+        ('chinese yuan', 'Chinese Yuan'),
+        ('swedish krona', 'Swedish Krona'),
+        ('new zealand dollar', 'New Zealand Dollar'),
+        ('mexican peso', 'Mexican Peso'),
+        ('singapore dollar', 'Singapore Dollar'),
+        ('hong kong dollar', 'Hong Kong Dollar'),
+        ('norwegian krone', 'Norwegian Krone'),
+        ('south korean won', 'South Korean Won'),
+        ('russian ruble', 'Russian Ruble'),
+        ('indian rupee', 'Indian Rupee'),
+        ('brazilian real', 'Brazilian Real'),
+        ('south african rand', 'South African Rand'),
+        ('turkish lira', 'Turkish Lira')
+    ]
+
+    user = models.ForeignKey(NewUser, on_delete=models.CASCADE)
+    bank_account_id = models.CharField(max_length=16, unique=True, blank=True)
+    label = models.CharField(max_length=100)
+    bank_name = models.CharField(max_length=100)
+    bank_branch = models.CharField(max_length=100)
+    bank_country = models.CharField(max_length=100)
+    account_name = models.CharField(max_length=100)
+    account_number = models.CharField(max_length=100)
+    routing_number = models.CharField(max_length=100)
+    swift_code = models.CharField(max_length=100)
+    currency = models.CharField(max_length=100, choices=CURRENCY_CHOICES)
+    created_at = models.DateTimeField(default=timezone.now) 
+    
+    def __str__(self):
+        return f'{self.user.user_name} - {self.label}'
+    
+    
+    def save(self, *args, **kwargs):
+        if not self.bank_account_id:
+            self.bank_account_id = self.generate_bank_account_id()
+        
+        super(BankAccount, self).save(*args, **kwargs)
+    
+    
+    def generate_bank_account_id(self):
+        return secrets.token_hex(8).upper()
+    
+    
+class BankCard(models.Model):
+    user = models.ForeignKey(NewUser, on_delete=models.CASCADE)
+    bank_card_id = models.CharField(max_length=16, unique=True, blank=True)
+    label = models.CharField(max_length=100)
+    card_number = models.CharField(max_length=50)
+    name_on_card = models.CharField(max_length=50)
+    expiration_date = models.CharField(max_length=20)
+    cvv = models.CharField(max_length=3)
+    address = models.CharField(max_length=100)
+    city_town =  models.CharField(max_length=100)
+    state = models.CharField(max_length=100)
+    zip_code = models.CharField(max_length=50)
+    country = models.CharField(max_length=100)
+    created_at = models.DateTimeField(default=timezone.now) 
+    
+    
+    def __str__(self):
+        return f'{self.user.user_name} - {self.label}'
+    
+    
+    def save(self, *args, **kwargs):
+        if not self.bank_card_id:
+            self.bank_card_id = self.generate_bank_card_id()
+        
+        super(BankCard, self).save(*args, **kwargs)
+    
+    
+    def generate_bank_card_id(self):
+        return secrets.token_hex(8).upper()
+    
+
 
 #KYC verification 
 class KYCverification(models.Model):
@@ -223,6 +371,7 @@ class KYCverification(models.Model):
     font_side = models.ImageField(upload_to='kyc/')
     back_side = models.ImageField(upload_to='kyc/')
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(default=timezone.now) 
     
     def __str__(self):
         return f'{self.user.user_name} KYCVerification '
@@ -239,8 +388,9 @@ class Withdraw(models.Model):
     
     user = models.ForeignKey(NewUser, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
-    wallet_address = models.CharField(max_length=100)
-    wallet_name = models.CharField(max_length=50,  blank=True, null=True)
+    payment_method_type = models.ForeignKey(ContentType, on_delete=models.CASCADE, null=True)
+    payment_method_id = models.PositiveIntegerField(null=True)
+    payment_method = GenericForeignKey('payment_method_type', 'payment_method_id')
     status =  status = models.CharField(max_length=10, choices=STATUS_CHOICES)
     transaction_id = models.CharField(max_length=16, unique=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now) 
@@ -249,6 +399,9 @@ class Withdraw(models.Model):
         return f'{self.user.user_name} - {self.amount} - {self.status}'
     
     def save(self, *args, **kwargs):
+        payment_model = self.payment_method_type.model_class()
+        if not payment_model.objects.filter(id=self.payment_method_id, user=self.user).exists():
+            raise ValueError("Payment method not avaliable")
         if not self.transaction_id:
             self.transaction_id = self.generate_transaction_id()
         if self.status == 'successful':
@@ -284,6 +437,7 @@ class InvestmentPlan(models.Model):
     def save(self, *args, **kwargs):
         if not self.plan_id:
             self.plan_id = self.generate_plan_id()
+        super(InvestmentPlan, self).save(*args, **kwargs)
             
             
     def generate_plan_id(self):
@@ -329,7 +483,7 @@ class UserInvestment(models.Model):
     last_update_time = models.DateTimeField(null=True, blank=True)
     cashout = models.BooleanField(default=False)
     withdrawn = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)
+    created_at = models.DateTimeField(default=timezone.now) 
     balance_deducted = models.BooleanField(default=False) 
     def save(self, *args, **kwargs):
         if not self.investment_id:
@@ -429,7 +583,7 @@ class Cashout(models.Model):
                
         
         if investment.withdrawn == False  and investment.investment_status == "completed":
-            user_balance.balance = Decimal(user_balance.balance) + investment.current_intrest_return
+            user_balance.balance = Decimal(user_balance.balance) + investment.total_intrest_return
             investment.withdrawn = True
             investment.save()
             user_balance.save()
@@ -467,13 +621,22 @@ class Commission(models.Model):
 
 # Email 
 class Email(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('failed', 'Failed'),
+        ('delivered', 'Delivered'),
+    ]
+    
     to = models.EmailField(blank=True, null=True)
     subject = models.CharField(max_length=500, null=True, blank=True)
     body = models.TextField(null=True, blank=True)
+    delivery_status =  models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
     date = models.DateField(auto_now_add=True)
 
     def __str__(self):
         return f"Email to {self.to}"
+
+
 
 
 #Blacklist IP
