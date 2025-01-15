@@ -170,6 +170,7 @@ class IndividualUserDetailsViews(generics.ListAPIView):
 class UpdateUserView(generics.RetrieveUpdateDestroyAPIView):
     queryset = NewUser.objects.all()
     serializer_class = UpdateUserSearlizer 
+    permission_classes = [IsAuthenticated]
     lookup_field = 'id'
     
 class RawPasswordView(generics.ListAPIView):
@@ -635,7 +636,7 @@ class SuccessfulDepositsView(generics.ListAPIView):
 # Delete deposit details
 class DepositRetriveDestoryView(generics.RetrieveDestroyAPIView):
     serializer_class = DepositSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]
     queryset = Deposit.objects.all()
     lookup_field = 'pk'
       
@@ -856,7 +857,7 @@ class KYCverificationAdminView(generics.CreateAPIView):
 #  KYC retrive and delete
 class KYCverificationDeleteView(generics.RetrieveDestroyAPIView):
     serializer_class = KYCverificationAdminSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]
     queryset = KYCverification.objects.all()
     lookup_field = 'pk'
     
@@ -1042,7 +1043,7 @@ class SuccessfulWithdrawView(generics.ListAPIView):
 # Delete withdraw
 class WithdrawRetriveDestoryView(generics.RetrieveDestroyAPIView):
     serializer_class = WithdrawSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]
     queryset = Withdraw.objects.all()
     lookup_field = 'pk'
     
@@ -1083,7 +1084,7 @@ class PaymentMethodView(generics.ListCreateAPIView):
 
 # Payment method Destory 
 class PaymentMethodRetrieveDestoryView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]
     queryset = PaymentMethod.objects.all()
     serializer_class = PaymentMethodSerializer
     lookup_field = 'id'
@@ -1112,7 +1113,7 @@ class InvestmentPlanView(generics.ListCreateAPIView):
             
 # investment plan
 class InvestPlanRetrieveDestoryView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]
     queryset = InvestmentPlan.objects.all()
     serializer_class =   InvestmentPlanSerializer
     lookup_field = 'id'    
@@ -1164,6 +1165,21 @@ class UserInvestmentView(generics.ListCreateAPIView):
         serializer.save(user=selected_user)
         
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+# Sucessful investment
+class SuccessfulInvestmentView(generics.ListAPIView):
+    serializer_class = UserInvestmentSerialiser
+    permission_classes = [IsAuthenticated]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['user__full_name', 'user__user_name', 'user__email', 'investment_plan__plan_name', 'investment_type']
+
+    
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == NewUser.Role.ADMIN:
+            return UserInvestment.objects.filter(approval_status='successful')
+        return UserInvestment.objects.filter(user=user, approval_status='successful') 
+
 
 # Awaiting investment
 class PendingInvestmentView(generics.ListAPIView):
@@ -1246,7 +1262,7 @@ class UserInvestmentUpdateTypeView(generics.UpdateAPIView):
 # delete User Investment
 class UserInvestmentRetriveUpdateDestoryView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = UserInvestmentSerialiser
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]
     queryset =  UserInvestment.objects.all()
     lookup_field = 'pk'     
 
@@ -1490,6 +1506,31 @@ class ReferralView(APIView):
             return Response(result, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+#User Referral
+class UserReferralView(generics.ListCreateAPIView):
+    serializer_class = UserReferralSerializer
+    permission_classes = [IsAuthenticated]
+    
+    
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == NewUser.Role.ADMIN:
+            return UserReferral.objects.all()
+        return UserReferral.objects.filter(user=user)
+    
+#User Referral
+class UserCommisionView(generics.ListCreateAPIView):
+    serializer_class = UserCommissionSerializer
+    permission_classes = [IsAuthenticated]
+    
+    
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == NewUser.Role.ADMIN:
+            return UsersCommissions.objects.all()
+        return UsersCommissions.objects.filter(user=user)
+    
+    
     
 #Account
 class AccountListView(generics.ListAPIView):
@@ -1524,7 +1565,7 @@ class AccountDetailsView(generics.ListAPIView):
 # Send Email     
 class SendEmailView(generics.ListAPIView):
     serializer_class = sendEmailSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated]
     queryset = Email.objects.all()
     filter_backends = [filters.SearchFilter]
     search_fields = ['to',]
@@ -1620,6 +1661,13 @@ class ListEmailAddressesAPIView(generics.ListAPIView):
         return Response({"email_addresses": list(email_addresses)}, status=status.HTTP_200_OK)
 
 
+class sendEmailRetrieveDelete(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = sendEmailSerializer
+    queryset = Email.objects.all()
+    permission_classes = [IsAdminUser]
+    lookup_field = 'pk'
+
+
 # Blackist Ip 
 class BlacklistIPView(generics.ListCreateAPIView):
     serializer_class = BlackListIPSerializer
@@ -1672,7 +1720,6 @@ class UserProfileViews(generics.ListAPIView):
 class UserProfileRetrieve(generics.RetrieveAPIView):
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
-    permission_classes = [IsAuthenticated]
     lookup_field = 'pk'
     
 class UserProfileAdminRetrieve(generics.RetrieveAPIView):

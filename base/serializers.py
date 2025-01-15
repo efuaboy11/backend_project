@@ -158,7 +158,22 @@ class UserVerifiactionDetailsSerializer(serializers.ModelSerializer):
                   'status',
                   'created_at'
                 ]
-        read_only_fields = ['user', 'status', 'created_at']
+        read_only_fields = ['user','status', 'created_at']
+        
+    def create(self, validated_data):
+        request = self.context.get('request')
+        profile_photo = validated_data.pop('profile_photo', None)
+        user = request.user
+
+        user_verification = super().create(validated_data)
+
+        if profile_photo:
+            user.profile_photo = profile_photo
+            user.save()
+
+        return user_verification
+    
+    
     def get_user_details(self, obj):
         user = obj.user
         serializers = RegisterUserSerializer(instance=user, context=self.context, many=False)
@@ -225,7 +240,7 @@ class UserVerificationUpdateStatusSerializer(serializers.ModelSerializer):
 class PaymentMethodSerializer(serializers.ModelSerializer):
     class Meta:
         model = PaymentMethod
-        fields = ['id', 'name', 'wallet_address', 'qr_code']
+        fields = ['id', 'name', 'network', 'type', 'wallet_address', 'qr_code']
         read_only_fields = ['qr_code']
         
     
@@ -540,7 +555,7 @@ class WithdrawStatusUpdateSerializer(serializers.ModelSerializer):
 class InvestmentPlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = InvestmentPlan
-        fields = ['id', 'plan_id', 'plan_name', 'min_amount', 'max_amount', 'percentage_return', 'duration', 'time_rate']
+        fields = ['id', 'plan_description', 'plan_id', 'plan_name', 'min_amount', 'max_amount', 'percentage_return', 'duration', 'time_rate']
         read_only_fields = ['plan_id']
         
         
@@ -749,6 +764,11 @@ class CommissionSerializer(serializers.ModelSerializer):
         model = Commission
         fields = ['id', 'name', 'amount']
         
+    def get_user_details(self, obj):
+        user = obj.user
+        serializers = RegisterUserSerializer(instance=user, context=self.context, many=False)
+        return serializers.data
+        
 
 # Referral
 class ReferralSerializer(serializers.Serializer):
@@ -770,6 +790,9 @@ class ReferralSerializer(serializers.Serializer):
         if current_user.referred_users.filter(id=referred_user.id).exists():
             raise serializers.ValidationError("You have already referred this user.")
         
+        if UserReferral.objects.filter(referral_user=referred_user).exists():
+            raise serializers.ValidationError('This user have already been referred')
+        
         return data  # Return the validated data dictionary
     
     def create(self, validated_data):
@@ -782,10 +805,45 @@ class ReferralSerializer(serializers.Serializer):
         user_balance.balance += commission.amount
         user_balance.save()
         
+        user_commision = UsersCommissions.objects.create(user=current_user, amount=commission.amount)
+        user_commision.save()
+        
+        user_referral = UserReferral.objects.create(user=current_user, referral_user=referred_user)
+        user_referral.save()
+        
+        
+        
+        
         return {"message": f"{commission.amount} added to {current_user.user_name}'s balance"}
     
+
+#user Referral
+class UserReferralSerializer(serializers.ModelSerializer):
+    user_details = serializers.SerializerMethodField()
+    referral_user_details = serializers.SerializerMethodField()
     
+    class Meta:
+        model = UserReferral
+        fields = ['id', 'user', 'user_details', 'referral_user', 'referral_user_details', 'created_at']
+        
+    def get_user_details(self, obj):
+        return RegisterUserSerializer(instance=obj.user, context=self.context).data
+    def get_referral_user_details(self, obj):
+        return RegisterUserSerializer(instance=obj.referral_user, context=self.context).data
+
+class UserCommissionSerializer(serializers.ModelSerializer):
+    user_details = serializers.SerializerMethodField()
+    class Meta:
+        model = UsersCommissions
+        fields = ['id', 'transaction_id', 'user', 'user_details', 'amount', 'created_at']
+        
+    def get_user_details(self, obj):
+        user = obj.user
+        serializers = RegisterUserSerializer(instance=user, context=self.context, many=False)
+        return serializers.data
+
 # Account   
+
 class AccountSerializer(serializers.ModelSerializer):
     user_details = serializers.SerializerMethodField()
     user_balance = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)

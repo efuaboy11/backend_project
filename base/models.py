@@ -156,7 +156,19 @@ class DisableAccount(models.Model):
 # Account 
 # payment method 
 class PaymentMethod(models.Model):
+    NETWORK_CHOICES = [
+        ('BTC', 'BTC'),  
+        ('ERC20', 'ERC20'),
+        ('DOT', 'DOT'), 
+        ('BEP2', 'BEP2'),
+        ('BEP20', 'BEP20'),
+        ('ERC20', 'ERC20'),
+        ('OMNI', 'OMNI'),
+        ('TRC20', 'TRC20'),
+    ]
     name = models.CharField(max_length=100)
+    network = models.CharField(max_length=100, choices=NETWORK_CHOICES, null=True)
+    type = models.CharField(max_length=100, null=True)
     wallet_address = models.CharField(max_length=255, unique=True)
     qr_code = models.ImageField(upload_to='wallet_qr_codes/', blank=True, null=True)
     
@@ -203,7 +215,7 @@ class Deposit(models.Model):
         ('declined', 'Declined'),
         ('successful', 'Successful'),
     ]
-    
+        
     user = models.ForeignKey(NewUser, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     payment_method = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True)
@@ -428,6 +440,7 @@ class InvestmentPlan(models.Model):
     ]
     plan_id = models.CharField(max_length=16, unique=True, blank=True)
     plan_name = models.CharField(max_length=100)
+    plan_description = models.CharField(max_length=100, blank=True)
     min_amount = models.DecimalField(max_digits=10, decimal_places=2)
     max_amount = models.DecimalField(max_digits=10, decimal_places=2)
     percentage_return = models.DecimalField(max_digits=5, decimal_places=2)
@@ -617,6 +630,39 @@ class Commission(models.Model):
     
     def __str__(self):
         return f"Commission: {self.amount}"
+    
+    
+class UsersCommissions(models.Model):
+    user = models.ForeignKey(NewUser, on_delete=models.CASCADE)
+    transaction_id = models.CharField(max_length=16, unique=True, blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    created_at = models.DateTimeField(default=timezone.now) 
+    def save(self, *args, **kwargs):
+        if not self.transaction_id:
+            self.transaction_id = self.generate_transaction_id()
+    
+        super(UsersCommissions, self).save(*args, **kwargs)
+        
+        
+    def generate_transaction_id(self):
+        return secrets.token_hex(8).upper()
+    
+class UserReferral(models.Model):
+    referral_id = models.CharField(max_length=16, unique=True, blank=True)
+    user = models.ForeignKey(NewUser, on_delete=models.CASCADE, related_name='user')
+    referral_user = models.ForeignKey(NewUser, on_delete=models.CASCADE, related_name='referral_user')
+    created_at = models.DateTimeField(default=timezone.now) 
+    
+    def save(self, *args, **kwargs):
+        if not self.referral_id:
+            self.referral_id = self.generate_referral_id()
+    
+        super(UserReferral, self).save(*args, **kwargs)
+        
+        
+    def generate_referral_id(self):
+        return secrets.token_hex(8).upper()
+    
     
 
 # Email 

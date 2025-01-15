@@ -87,6 +87,7 @@ urlpatterns = [
     #User Investment
     path('user-investment/', UserInvestmentView.as_view(), name='user-investment'),  
     path('user-investment/<int:pk>/', UserInvestmentRetriveUpdateDestoryView.as_view(), name='delete-investment'),
+    path('user-investment/successful/', SuccessfulInvestmentView.as_view(), name='sucessful-investment'),  
     path('user-investment/active/', ActiveInvestmentView.as_view(), name='active-investment'),  
     path('user-investment/pending/', PendingInvestmentView.as_view(), name='awaiting-investment'),  
     path('user-investment/completed/', CompletedInvestmentView.as_view(), name='completed-investment'),  
@@ -106,13 +107,15 @@ urlpatterns = [
     path('commission/', CommissionView.as_view(), name='commission'), 
     path('commission/<int:pk>/', CommissionRetrieveDeleteUpdate.as_view(), name='commission-update'),
     path('referral/', ReferralView.as_view(), name='apply_referral'),
-    
+    path('user-referral/', UserReferralView.as_view(), name='apply_referral'),
+    path('user-commission/', UserCommisionView.as_view(), name='apply_referral'),
     #Account
     path('account/', AccountListView.as_view(), name='account'),
     path('account-details/', AccountDetailsView.as_view(), name='account'),
     
     #Email
     path('send-mail/', SendEmailView.as_view(), name='send-email'),
+        path('send-mail/<int:pk>/', sendEmailRetrieveDelete.as_view(), name='send-email'),
     path('list-emails/<str:email_type>/',
          views.ListEmailAddressesAPIView.as_view(), name='list-emails'),
     path('Blacklist-ip/', BlacklistIPView.as_view(), name='blacklist-ip'),
