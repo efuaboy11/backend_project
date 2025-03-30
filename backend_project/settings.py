@@ -98,11 +98,11 @@ if ENVIRONMENT == "production":
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
-            "NAME": env("POSTGRES_DB"),
-            "USER": env("POSTGRES_USER"),
-            "PASSWORD": env("POSTGRES_PASSWORD"),
-            "HOST": env("POSTGRES_HOST"),
-            "PORT": env("POSTGRES_PORT"),
+            "NAME": "mydatabase",
+            "USER": "myuser",
+            "PASSWORD": "terrysilva11",
+            "HOST": "153.92.222.155",
+            "PORT": "5432",
         }
     }
 else:
