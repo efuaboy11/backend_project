@@ -176,7 +176,7 @@ REST_FRAMEWORK = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:3001",
-    "http://153.92.222.155:8000"
+    "153.92.222.155"
 ]
     
 AUTH_USER_MODEL = 'base.NewUser'
