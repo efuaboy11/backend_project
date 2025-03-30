@@ -14,7 +14,7 @@ from pathlib import Path
 from django.conf import settings
 from datetime import timedelta
 import os
-import environ
+from environ import Env
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -90,11 +90,9 @@ WSGI_APPLICATION = 'backend_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-env = environ.Env()
-environ.Env.read_env(os.path.join(BASE_DIR, ".env"))
-
-# Get environment mode
-ENVIRONMENT = env("DJANGO_ENV", default="development")
+env = environenv = Env()
+Env.read_env()
+ENVIRONMENT = env('ENVIRONMENT', default='development')
 
 if ENVIRONMENT == "production":
     DATABASES = {
