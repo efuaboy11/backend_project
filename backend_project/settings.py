@@ -92,7 +92,7 @@ WSGI_APPLICATION = 'backend_project.wsgi.application'
 
 env = environenv = Env()
 Env.read_env()
-ENVIRONMENT = env('ENVIRONMENT', default='development')
+ENVIRONMENT = env('ENVIRONMENT', default='production')
 
 if ENVIRONMENT == "production":
     DATABASES = {
