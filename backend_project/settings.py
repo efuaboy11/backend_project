@@ -30,6 +30,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+CORS_ALLOW_ALL_ORIGINS = True
 
 # Application definition
 
@@ -61,7 +62,8 @@ MIDDLEWARE = [
     
     "corsheaders.middleware.CorsMiddleware",
     
-    'base.middleware.BlockBlacklistedIPMiddleware'
+    'base.middleware.BlockBlacklistedIPMiddleware',
+    'base.middleware.BlockBotsMiddleware'
 ]
 
 ROOT_URLCONF = 'backend_project.urls'
@@ -157,8 +159,9 @@ REST_FRAMEWORK = {
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
+    "http://localhost:3001",
 ]
-
+    
 AUTH_USER_MODEL = 'base.NewUser'
 
 
@@ -170,9 +173,9 @@ EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'iseghohimhene@gmail.com'  # Your Gmail account
-EMAIL_HOST_PASSWORD = 'jucx fgck lizv wtim'  # Your Gmail password or app-specific password
-DEFAULT_FROM_EMAIL = EMAIL_HOST
+EMAIL_HOST_USER = 'iamterrysilva123456789@gmail.com'  # Your Gmail account
+EMAIL_HOST_PASSWORD = 'enio zatp intb hwtu'  # Your Gmail password or app-specific password
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 
 

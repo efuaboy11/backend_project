@@ -1092,8 +1092,8 @@ class PaymentMethodRetrieveDestoryView(generics.RetrieveUpdateDestroyAPIView):
 
 # Investment Plan
 class InvestmentPlanView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated]
-    queryset = InvestmentPlan.objects.all()
+    permission_classes = [AllowAny]
+    queryset = InvestmentPlan.objects.all() 
     serializer_class = InvestmentPlanSerializer
     filter_backends = [filters.SearchFilter]
     search_fields = ['plan_name','time_rate']
@@ -1401,11 +1401,16 @@ class CashoutView(generics.ListCreateAPIView):
 
 class BonusView(generics.ListCreateAPIView):
     serializer_class = BonusSerializer
-    permission_classes = [IsAdminUser]
-    queryset = Bonus.objects.all()
+    permission_classes = [IsAuthenticated]
     filter_backends = [filters.SearchFilter]
     search_fields = ['user__full_name', 'user__user_name', 'user__email']
-
+    
+    
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == NewUser.Role.ADMIN:
+            return Bonus.objects.all()
+        return Bonus.objects.filter(user=user)
 
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -1712,6 +1717,57 @@ class NewsLetterRetrieveDelete(generics.RetrieveUpdateDestroyAPIView):
         
     
     
+    
+class ContactUsView(APIView):
+    
+    def post(self, request, *args, **kwargs):
+        serializer = ContactUsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        user_email = request.data.get('email')
+        admin_email = settings.DEFAULT_FROM_EMAIL
+        name = request.data.get('name')
+        message = request.data.get('message')
+        is_bulk = request.data.get('is_bulk', False)
+        from_email = admin_email
+        body = f"""
+            <html>
+                <body style="font-family: Arial, sans-serif; background-color: #f2f2f2; margin: 0; padding: 0;">
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f2f2f2; padding: 20px;">
+                        <tr>
+                            <td>
+                                <table align="center" border="0" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 8px; padding: 20px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);">
+                                    <tr>
+                                        <td style="padding: 20px 0; text-align: center;">
+                                            <h1 style="color: #4CAF50; font-size: 24px; margin: 0;">{name}</h1>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 10px 0; font-size: 16px; color: #333333;">
+                                            <p>{user_email}</p>
+                                            <p>{message}</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 20px 0; text-align: center; font-size: 12px; color: #888888;">
+                                            <p>&copy; 2024 Your Company Name. All Rights Reserved.</p>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
+                </body>
+            </html>
+            """
+        print(from_email)
+        delivery_results = send_bulk_email(from_email, body, name, message, is_bulk)
+        if delivery_results:
+            return Response({"message": "Email(s) sent successfully."}, status=status.HTTP_200_OK)
+        else:
+            return Response({"error": "Failed to send email(s)."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+       
 class UserProfileViews(generics.ListAPIView):
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer

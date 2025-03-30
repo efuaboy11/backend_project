@@ -125,6 +125,10 @@ urlpatterns = [
     path('news-letter/', NewsLetterViews.as_view(), name='news-letter'),
     path('news-letter/<int:pk>/', NewsLetterRetrieveDelete.as_view(), name='news-letter'), 
     
+    #Contact Us
+    path('contact-us/', ContactUsView.as_view(), name='news-letter'), 
+    
+    #user profile
     path('user-profile/', UserProfileViews.as_view(), name='user-profile'),
     path('user-profile/<int:pk>/', UserProfileRetrieve.as_view(), name='user-profile'),
     path('user-profile/admin/<uuid:user>/', UserProfileAdminRetrieve.as_view(), name='update-Balance'),

@@ -919,6 +919,11 @@ class NewsLetterSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'email', 'created_at']
         read_only_fields = ['created_at']
         
+class ContactUsSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    name = serializers.CharField(max_length=100)
+    message =serializers.CharField(max_length=500)
+        
 # User PRofile 
 class UserProfileSerializer(serializers.ModelSerializer):
     user_details = serializers.SerializerMethodField()
