@@ -30,7 +30,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = [
     "153.92.222.155",
-    "api.amanilightequity.com"
+    "api.amanilightequity.com",
     "amanilightequity.com"
 ]
 
@@ -182,7 +182,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3001",
     "http://153.92.222.155", 
     "http://api.amanilightequity.com/",
-    "http://amanilightequity.com/"
+    "http://amanilightequity.com/",
     
 ]
     
