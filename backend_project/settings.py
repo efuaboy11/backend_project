@@ -31,6 +31,7 @@ DEBUG = True
 ALLOWED_HOSTS = [
     "153.92.222.155",
     "api.amanilightequity.com"
+    "amanilightequity.com"
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
@@ -180,7 +181,9 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:3001",
     "http://153.92.222.155", 
-    "http://api.amanilightequity.com/"
+    "http://api.amanilightequity.com/",
+    "http://amanilightequity.com/"
+    
 ]
     
 AUTH_USER_MODEL = 'base.NewUser'
