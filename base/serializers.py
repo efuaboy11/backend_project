@@ -555,7 +555,7 @@ class WithdrawStatusUpdateSerializer(serializers.ModelSerializer):
 class InvestmentPlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = InvestmentPlan
-        fields = ['id', 'plan_description', 'plan_id', 'plan_name', 'min_amount', 'max_amount', 'percentage_return', 'duration', 'time_rate']
+        fields = ['id', 'plan_description', 'plan_id', 'plan_name', 'min_amount', 'max_amount', 'percentage_return', 'duration', 'duration_span', 'time_rate']
         read_only_fields = ['plan_id']
         
         

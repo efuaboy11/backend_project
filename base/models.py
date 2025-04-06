@@ -438,6 +438,13 @@ class InvestmentPlan(models.Model):
         ('monthly', 'Monthly'),
         ('yearly', 'Yearly'),
     ]
+    DURATION_SPAN_CHOICES = [
+        ('hour(s)', 'Hour(s)'),
+        ('day(s)', 'Day(s)'),
+        ('week(s)', 'Week(s)'),
+        ('month(s)', 'Month(s)'),
+        ('year(s)', 'Year(s)'),
+    ]
     plan_id = models.CharField(max_length=16, unique=True, blank=True)
     plan_name = models.CharField(max_length=100)
     plan_description = models.CharField(max_length=100, blank=True)
@@ -445,6 +452,7 @@ class InvestmentPlan(models.Model):
     max_amount = models.DecimalField(max_digits=10, decimal_places=2)
     percentage_return = models.DecimalField(max_digits=5, decimal_places=2)
     duration = models.CharField(max_length=100)
+    duration_span = models.CharField(max_length=20, choices=DURATION_SPAN_CHOICES, blank=True, null=True)
     time_rate = models.CharField(max_length=10, choices=TIME_RATE_CHOICES, default='none')
     
     def save(self, *args, **kwargs):
