@@ -1,14 +1,14 @@
 from django.urls import path
 from .views import *
 from . import views
-
+from django.views.generic import TemplateView
 
 app_name = 'base'
 
 urlpatterns = [
     path("", views.endpoints, name="endpoints"),
     
-    
+    path("robots.txt", TemplateView.as_view(template_name="robots.txt", content_type="text/plain")),
     path('users/', Users.as_view(), name='create_user'),
     path('users/<uuid:id>/', UpdateUserView.as_view(), name='user_details'),
     path('users/details/', IndividualUserDetailsViews.as_view(), name='create_user'),
