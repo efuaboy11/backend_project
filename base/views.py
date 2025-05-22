@@ -519,6 +519,7 @@ class AllDepositsView(generics.ListCreateAPIView):
     search_fields = ['user__full_name', 'user__user_name', 'user__email', 'payment_method__name', 'amount']
 
     def get_queryset(self):
+        
         # Handle GET: If the user is admin, return all deposits, otherwise return only their deposits
         if self.request.method == 'GET':
             if self.request.user.role == 'ADMIN':
@@ -533,7 +534,7 @@ class AllDepositsView(generics.ListCreateAPIView):
         email  = request.user.email
         try:
             subject = 'Sucessful deposit'
-            user_email = email
+            user_email = 'iseghohimhene@gmail.com'
             
             body = f"""
                 <html>
